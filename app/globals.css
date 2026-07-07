@@ -1072,3 +1072,363 @@ button:active {
     height: 18px;
   }
 }
+
+/* TRRY Clear Fun Brutalism design pass */
+:root {
+  --lime: #ccff00;
+  --hot-pink: #ff3f8e;
+  --lab-blue: #6ee7ff;
+  --paper: #fffdf6;
+  --shadow: 8px 8px 0 var(--ink);
+  --shadow-small: 4px 4px 0 var(--ink);
+}
+
+body {
+  background:
+    linear-gradient(90deg, rgba(17, 17, 17, 0.055) 1px, transparent 1px),
+    linear-gradient(rgba(17, 17, 17, 0.055) 1px, transparent 1px),
+    var(--bg);
+  background-size: 18px 18px;
+}
+
+.appShell {
+  background: rgba(255, 250, 239, 0.96);
+}
+
+.topbar {
+  min-height: 54px;
+  border-bottom: 4px solid var(--ink);
+  background: var(--paper);
+  padding: 9px 12px;
+}
+
+.brandName {
+  display: inline-flex;
+  align-items: center;
+  border: var(--border-light);
+  border-radius: 999px;
+  background: var(--lime);
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 7px 9px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.headerActions {
+  gap: 8px;
+}
+
+.iconButton {
+  width: 40px;
+  height: 36px;
+  border-width: 3px;
+  border-radius: 14px;
+}
+
+.profileButton {
+  background: var(--hot-pink);
+}
+
+.cartButton {
+  background: var(--lime);
+}
+
+.heroCard,
+.screenHeader,
+.formCard,
+.trackCard,
+.confirmationCard,
+.productCard,
+.flowStrip {
+  border-width: 4px;
+  border-radius: 18px;
+}
+
+.heroCard {
+  overflow: visible;
+  gap: 12px;
+  background:
+    linear-gradient(135deg, rgba(204, 255, 0, 0.28), transparent 32%),
+    var(--surface);
+  box-shadow: var(--shadow);
+  padding: 18px 15px 16px;
+}
+
+.heroCard h1 {
+  font-size: clamp(2rem, 10vw, 2.7rem);
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.heroCard p {
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 850;
+}
+
+.pillRow span,
+.sectionIntro span,
+.screenHeader span,
+.formIntro span,
+.statusBadge,
+.priceBadge {
+  border-width: 3px;
+  box-shadow: 3px 3px 0 var(--ink);
+  transform: rotate(-1deg);
+}
+
+.pillRow span:first-child,
+.sectionIntro span,
+.trackCard .formIntro span,
+.trackResult .statusBadge {
+  background: var(--lime);
+}
+
+.pillRow span:last-child,
+.shopAccent span,
+.formCard.pink .formIntro span {
+  background: var(--hot-pink);
+}
+
+.sectionIntro {
+  align-items: center;
+}
+
+.sectionIntro h2,
+.screenHeader h1,
+.formIntro h2,
+.confirmationCard h2 {
+  color: var(--ink);
+  font-size: clamp(1.65rem, 8vw, 2.25rem);
+  letter-spacing: -0.05em;
+  text-transform: none;
+}
+
+.actionGrid,
+.productGrid {
+  gap: 13px;
+}
+
+.actionCard {
+  min-height: 76px;
+  border-width: 4px;
+  border-radius: 16px;
+  box-shadow: var(--shadow-small);
+  padding: 13px;
+}
+
+.actionCard span {
+  font-size: 1.08rem;
+  letter-spacing: -0.025em;
+}
+
+.actionCard small {
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.actionCard.pink,
+.submitButton,
+.cardButton {
+  background: var(--hot-pink);
+}
+
+.actionCard.yellow,
+.secondaryButton,
+.inlineSwitch,
+.confirmationCard {
+  background: var(--lime);
+}
+
+.actionCard.teal {
+  background: var(--lab-blue);
+}
+
+.actionCard.purple {
+  background: #bca7ff;
+}
+
+.actionCard.cream {
+  background: var(--paper);
+}
+
+.screenHeader {
+  background:
+    linear-gradient(90deg, var(--lime) 0 14px, transparent 14px),
+    var(--surface);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.screenHeader p,
+.formIntro p,
+.confirmationCard p,
+.trackResult p,
+.productCopy p {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.flowStrip {
+  gap: 6px;
+  background: var(--paper);
+  box-shadow: var(--shadow-small);
+  padding: 7px;
+}
+
+.flowStrip span {
+  min-height: 44px;
+  border-width: 3px;
+  background: var(--lime);
+  font-size: 8.5px;
+  transform: rotate(-1deg);
+}
+
+.flowStrip span:nth-child(even) {
+  background: var(--hot-pink);
+  transform: rotate(1deg);
+}
+
+.tealFlow span:nth-child(odd) {
+  background: var(--lab-blue);
+}
+
+.purpleFlow span:nth-child(odd) {
+  background: #bca7ff;
+}
+
+.productCard {
+  grid-template-columns: 92px 1fr;
+  gap: 12px;
+  background: var(--paper);
+  box-shadow: var(--shadow-small);
+  padding: 12px;
+}
+
+.productVisual {
+  min-height: 98px;
+  border-width: 3px;
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.productVisual span {
+  width: 64px;
+  height: 64px;
+  border-width: 3px;
+  background: var(--lime);
+}
+
+.productCopy h3 {
+  font-size: 1.22rem;
+  letter-spacing: -0.035em;
+}
+
+.priceBadge {
+  background: var(--lime);
+}
+
+.requestForm {
+  gap: 13px;
+}
+
+.formCard,
+.trackCard {
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  padding: 15px;
+}
+
+.formCard.yellow .formIntro span {
+  background: var(--lime);
+}
+
+.formCard.teal .formIntro span {
+  background: var(--lab-blue);
+}
+
+.formCard.purple .formIntro span {
+  background: #bca7ff;
+}
+
+.fieldGroup span {
+  font-size: 0.76rem;
+  letter-spacing: 0.01em;
+}
+
+.fieldGroup input,
+.fieldGroup select,
+.fieldGroup textarea {
+  min-height: 48px;
+  border-width: 3px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+.fieldGroup input:focus,
+.fieldGroup select:focus,
+.fieldGroup textarea:focus {
+  box-shadow: 4px 4px 0 var(--lime);
+}
+
+.submitButton,
+.secondaryButton,
+.plainButton,
+.cardButton,
+.inlineSwitch {
+  min-height: 50px;
+  border-width: 4px;
+  border-radius: 16px;
+  box-shadow: var(--shadow-small);
+  font-size: 0.96rem;
+  text-transform: uppercase;
+}
+
+.bottomNav {
+  border-width: 3px;
+  background: var(--paper);
+  border-radius: 18px;
+  box-shadow: var(--shadow-small);
+  padding: 5px;
+}
+
+.bottomNav button {
+  min-height: 34px;
+  border-radius: 12px;
+  color: var(--ink);
+  font-size: 8.5px;
+}
+
+.bottomNav button.active {
+  background: var(--lime);
+  border-width: 3px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.headerNotice,
+.formError {
+  background: var(--hot-pink);
+  border-width: 3px;
+  color: var(--ink);
+}
+
+@media (max-width: 360px) {
+  .heroCard h1 {
+    font-size: 1.78rem;
+  }
+
+  .actionCard {
+    min-height: 70px;
+  }
+
+  .actionCard span {
+    font-size: 0.94rem;
+  }
+
+  .productCard {
+    grid-template-columns: 78px 1fr;
+  }
+}

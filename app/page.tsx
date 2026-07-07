@@ -36,32 +36,32 @@ type Product = {
 
 const actions: HomeAction[] = [
   {
-    title: "Shop Statement Tees",
-    helper: "Ready designs + daily drops",
+    title: "Shop Tees",
+    helper: "Ready drops + slogans",
     tone: "pink",
     screen: "shop",
   },
   {
-    title: "Customize a Shirt",
-    helper: "Pick color + send design",
+    title: "Pa-custom Shirt",
+    helper: "Pili color + send peg",
     tone: "yellow",
     screen: "customize",
   },
   {
-    title: "Send Canva Link",
-    helper: "We clean and prepare your file",
+    title: "Send Canva",
+    helper: "Send file, kami prep",
     tone: "teal",
     screen: "canva",
   },
   {
-    title: "Uniform Inquiry",
-    helper: "For teams and businesses",
+    title: "Uniform Quote",
+    helper: "For barkada + business",
     tone: "purple",
     screen: "uniforms",
   },
   {
-    title: "Track My Order",
-    helper: "Check production status",
+    title: "Track Request",
+    helper: "Check status, no stress",
     tone: "cream",
     screen: "track",
   },
@@ -73,7 +73,7 @@ const products: Product[] = [
     description: "Ready slogan shirts for everyday drops and quick gifts.",
     price: "Starts at quote",
     tone: "pink",
-    actionLabel: "Customize This",
+    actionLabel: "Pa-custom",
     target: "customize",
   },
   {
@@ -81,7 +81,7 @@ const products: Product[] = [
     description: "Simple blank-style tops for clean prints and logo work.",
     price: "Ask for quote",
     tone: "yellow",
-    actionLabel: "Pick Color",
+    actionLabel: "Pili Color",
     target: "customize",
   },
   {
@@ -95,9 +95,9 @@ const products: Product[] = [
   {
     name: "Uniform Starter",
     description: "Company, team, school, and group order inquiries.",
-    price: "Request quote",
+    price: "Quote Na",
     tone: "purple",
-    actionLabel: "Request Quote",
+    actionLabel: "Quote Na",
     target: "uniforms",
   },
 ];
@@ -232,8 +232,8 @@ export default function HomePage() {
 
         <section className="actionSection" aria-labelledby="action-heading">
           <div className="sectionIntro">
-            <span>Start here</span>
-            <h2 id="action-heading">What do you want to make?</h2>
+            <span>Start dito</span>
+            <h2 id="action-heading">What are we making?</h2>
           </div>
 
           <div className="actionGrid">
@@ -257,8 +257,8 @@ export default function HomePage() {
       <section className="screenStack" aria-labelledby="shop-title">
         <div className="screenHeader shopAccent">
           <span>WALK-IN READY</span>
-          <h1 id="shop-title">Shop TRRY Merch</h1>
-          <p>Pick a starter item, then send the details for review and pricing.</p>
+          <h1 id="shop-title">TRRY Merch Lab</h1>
+          <p>Choose a base, send details, then wait for TRRY proof and quote.</p>
         </div>
 
         <div className="productGrid">
@@ -284,20 +284,20 @@ export default function HomePage() {
         <div className="flowStrip" aria-label="TRRY order flow">
           <span>Send Design</span>
           <span>Get Quote</span>
-          <span>Confirm Order</span>
-          <span>Production</span>
+          <span>Approve Proof</span>
+          <span>Print Time</span>
         </div>
         <RequestForm
           description="Tell TRRY what shirt, color, size, and print style you want. This creates a pending review request only."
           fields={customizeFields}
-          kicker="CUSTOMIZE THIS"
+          kicker="Pa-custom"
           onSubmit={(values) => submitRequest("Custom Shirt", values, customizeFields)}
-          submitLabel="Submit Custom Request"
-          title="Customize a Shirt"
+          submitLabel="Submit Na"
+          title="Pa-custom Shirt"
           tone="yellow"
         />
         <button className="inlineSwitch" onClick={() => navigate("canva")} type="button">
-          Already have a Canva link? Send it here.
+          May Canva na? Send mo here.
         </button>
       </section>
     );
@@ -310,15 +310,15 @@ export default function HomePage() {
           <span>Send Link</span>
           <span>File Check</span>
           <span>Quote</span>
-          <span>Approval</span>
+          <span>Approve Proof</span>
         </div>
         <RequestForm
           description="Paste your Canva link so TRRY can check the file and prepare it for quote approval."
           fields={canvaFields}
           kicker="SEND DESIGN"
           onSubmit={(values) => submitRequest("Canva Link", values, canvaFields)}
-          submitLabel="Send Canva Link"
-          title="Send Canva Link"
+          submitLabel="Send Canva"
+          title="Send Canva"
           tone="teal"
         />
       </section>
@@ -328,19 +328,19 @@ export default function HomePage() {
   function renderUniforms() {
     return (
       <section className="screenStack">
-        <div className="flowStrip purpleFlow" aria-label="TRRY uniform inquiry flow">
-          <span>Request Quote</span>
+        <div className="flowStrip purpleFlow" aria-label="TRRY Uniform Quote flow">
+          <span>Quote Na</span>
           <span>Logo Check</span>
           <span>Approve</span>
-          <span>Produce</span>
+          <span>Print Time</span>
         </div>
         <RequestForm
           description="Share your group order details so TRRY can review quantity, service, logo placement, and timeline."
           fields={uniformFields}
           kicker="UNIFORM PACKAGE"
           onSubmit={(values) => submitRequest("Uniform Inquiry", values, uniformFields)}
-          submitLabel="Submit Uniform Inquiry"
-          title="Uniform Inquiry"
+          submitLabel="Submit Quote"
+          title="Uniform Quote"
           tone="purple"
         />
       </section>
@@ -420,5 +420,7 @@ export default function HomePage() {
     </main>
   );
 }
+
+
 
 
