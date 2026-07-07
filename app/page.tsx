@@ -5,6 +5,7 @@ import ActionCard from "../components/ActionCard";
 import BottomNav, { type NavKey } from "../components/BottomNav";
 import ConfirmationCard from "../components/ConfirmationCard";
 import Hero from "../components/Hero";
+import OrderTrackerCard from "../components/OrderTrackerCard";
 import ProductCard from "../components/ProductCard";
 import RequestForm, { type FieldConfig, type RequestFormValues } from "../components/RequestForm";
 import TrackRequest from "../components/TrackRequest";
@@ -388,6 +389,8 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+
+        <OrderTrackerCard />
       </>
     );
   }
@@ -567,6 +570,8 @@ export default function HomePage() {
     </main>
   );
 }
+
+
 
 
 
