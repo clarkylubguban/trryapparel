@@ -1005,3 +1005,70 @@ button:active {
     height: 32px;
   }
 }
+
+/* Header profile + cart actions */
+.headerActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.iconButton {
+  display: inline-grid;
+  width: 37px;
+  height: 34px;
+  place-items: center;
+  border: var(--border-light);
+  border-radius: 12px;
+  box-shadow: var(--shadow-small);
+  padding: 0;
+}
+
+.profileButton {
+  background: var(--teal);
+}
+
+.cartButton {
+  background: var(--yellow);
+}
+
+.iconButton svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.headerNotice {
+  position: sticky;
+  top: 50px;
+  z-index: 9;
+  margin: 8px 11px 0;
+  border: var(--border-light);
+  border-radius: 12px;
+  background: var(--pink);
+  box-shadow: var(--shadow-small);
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 950;
+  text-align: center;
+}
+
+@media (max-width: 360px) {
+  .headerActions {
+    gap: 5px;
+  }
+
+  .iconButton {
+    width: 34px;
+    height: 32px;
+  }
+
+  .iconButton svg {
+    width: 18px;
+    height: 18px;
+  }
+}

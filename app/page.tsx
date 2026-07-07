@@ -164,6 +164,7 @@ export default function HomePage() {
   const [screen, setScreen] = useState<Screen>("home");
   const [confirmation, setConfirmation] = useState<StoredRequest | null>(null);
   const [trackQuery, setTrackQuery] = useState("");
+  const [cartNotice, setCartNotice] = useState(false);
 
   const loadRequests = useCallback((): StoredRequest[] => {
     if (typeof window === "undefined") {
@@ -184,7 +185,13 @@ export default function HomePage() {
     if (nextScreen !== "track") {
       setTrackQuery("");
     }
+    setCartNotice(false);
     setScreen(nextScreen);
+  }
+
+  function showCartNotice() {
+    setCartNotice(true);
+    window.setTimeout(() => setCartNotice(false), 2200);
   }
 
   function submitRequest(
@@ -387,14 +394,23 @@ export default function HomePage() {
     <main className="appShell">
       <header className="topbar" aria-label="TRRY Apparel header">
         <strong className="brandName">TRRY APPAREL</strong>
-        <button className="cartButton" type="button" aria-label="Cart coming soon" title="Cart coming soon">
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M6 6h15l-2 8H8L6 3H3" />
-            <circle cx="9" cy="20" r="1.5" />
-            <circle cx="18" cy="20" r="1.5" />
-          </svg>
-        </button>
+        <div className="headerActions" aria-label="Customer actions">
+          <button className="iconButton profileButton" onClick={() => navigate("track")} type="button" aria-label="Open request tracking" title="Track requests">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c1.7-4.2 4.4-6 8-6s6.3 1.8 8 6" />
+            </svg>
+          </button>
+          <button className="iconButton cartButton" onClick={showCartNotice} type="button" aria-label="Cart coming soon" title="Cart coming soon">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M6 6h15l-2 8H8L6 3H3" />
+              <circle cx="9" cy="20" r="1.5" />
+              <circle cx="18" cy="20" r="1.5" />
+            </svg>
+          </button>
+        </div>
       </header>
+      {cartNotice ? <div className="headerNotice" role="status">Cart coming soon</div> : null}
 
       <section className={screen === "home" ? "homeContent" : "screenContent"}>
         {renderScreen()}
@@ -404,4 +420,5 @@ export default function HomePage() {
     </main>
   );
 }
+
 
