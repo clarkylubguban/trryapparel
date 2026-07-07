@@ -116,14 +116,14 @@ const products: Product[] = [
 ];
 
 const customizeFields: FieldConfig[] = [
-  { name: "customerName", label: "Customer name", required: true, placeholder: "Your full name" },
-  { name: "contact", label: "Contact number or Messenger name", required: true, placeholder: "Phone or Messenger" },
-  { name: "shirtColor", label: "Shirt color", required: true, placeholder: "Black, white, pink..." },
-  { name: "size", label: "Size", required: true, options: ["XS", "S", "M", "L", "XL", "2XL", "3XL"] },
-  { name: "quantity", label: "Quantity", type: "number", required: true, placeholder: "1" },
-  { name: "customizationType", label: "Customization type", required: true, options: ["Print", "Embroidery", "Print + Embroidery"] },
-  { name: "designNotes", label: "Design notes", textarea: true, placeholder: "Tell us the slogan, logo placement, or design idea." },
-  { name: "deadline", label: "Deadline or needed date", type: "date", required: true },
+  { name: "customerName", label: "Customer name", required: true, placeholder: "Your full name", section: "Contact Info" },
+  { name: "contact", label: "Contact number or Messenger name", required: true, placeholder: "Phone or Messenger", section: "Contact Info" },
+  { name: "shirtColor", label: "Shirt color", required: true, placeholder: "Black, white, pink...", section: "Shirt Details" },
+  { name: "size", label: "Size", required: true, selectPlaceholder: "Select size", options: ["XS", "S", "M", "L", "XL", "2XL", "3XL"], section: "Shirt Details" },
+  { name: "quantity", label: "Quantity", type: "number", required: true, placeholder: "Quantity", section: "Shirt Details" },
+  { name: "customizationType", label: "Customization type", required: true, selectPlaceholder: "Select print type", options: ["Print", "Embroidery", "Print + Embroidery"], section: "Design Details" },
+  { name: "designNotes", label: "Design notes", textarea: true, placeholder: "Tell us the slogan, logo placement, or design idea.", section: "Design Details" },
+  { name: "deadline", label: "Deadline or needed date", type: "date", required: true, placeholder: "Pick your needed date", section: "Schedule" },
 ];
 
 const canvaFields: FieldConfig[] = [
@@ -432,9 +432,10 @@ export default function HomePage() {
           fields={customizeFields}
           kicker="Pa-custom"
           onSubmit={(values) => submitRequest("Custom Shirt", values, customizeFields)}
-          submitLabel="Submit Na"
+          submitLabel="Submit Request"
           title="Pa-custom Shirt"
           tone="yellow"
+          layout="stacked"
         />
         <button className="inlineSwitch" onClick={() => navigate("canva")} type="button">
           May Canva na? Send mo here.
@@ -566,6 +567,7 @@ export default function HomePage() {
     </main>
   );
 }
+
 
 
 
