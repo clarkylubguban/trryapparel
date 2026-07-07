@@ -387,8 +387,13 @@ export default function HomePage() {
     <main className="appShell">
       <header className="topbar" aria-label="TRRY Apparel header">
         <strong className="brandName">TRRY APPAREL</strong>
-        <span className="headerTitle">Print Shop + Merch Counter</span>
-        <span className="mvpBadge">MVP</span>
+        <button className="cartButton" type="button" aria-label="Cart coming soon" title="Cart coming soon">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M6 6h15l-2 8H8L6 3H3" />
+            <circle cx="9" cy="20" r="1.5" />
+            <circle cx="18" cy="20" r="1.5" />
+          </svg>
+        </button>
       </header>
 
       <section className={screen === "home" ? "homeContent" : "screenContent"}>
@@ -399,3 +404,4 @@ export default function HomePage() {
     </main>
   );
 }
+
