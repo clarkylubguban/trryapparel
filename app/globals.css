@@ -497,3 +497,440 @@ button:active {
     padding-bottom: 154px;
   }
 }
+
+/* Phase 2 functional MVP screens */
+.screenContent {
+  display: grid;
+  gap: 14px;
+  padding: 11px;
+  padding-bottom: 160px;
+}
+
+.screenStack {
+  display: grid;
+  gap: 13px;
+}
+
+.screenHeader,
+.formCard,
+.trackCard,
+.confirmationCard,
+.productCard,
+.flowStrip {
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-small);
+}
+
+.screenHeader {
+  display: grid;
+  gap: 7px;
+  background: var(--surface);
+  padding: 14px;
+}
+
+.screenHeader span,
+.formIntro span,
+.statusBadge,
+.priceBadge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: var(--border-light);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.screenHeader span,
+.formIntro span,
+.statusBadge {
+  padding: 6px 8px;
+}
+
+.screenHeader h1,
+.formIntro h2,
+.confirmationCard h2 {
+  margin: 0;
+  font-size: clamp(1.45rem, 8vw, 2rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+}
+
+.screenHeader p,
+.formIntro p,
+.confirmationCard p,
+.trackResult p,
+.productCopy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.32;
+}
+
+.shopAccent span {
+  background: var(--pink);
+}
+
+.flowStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  background: var(--surface);
+  padding: 6px;
+}
+
+.flowStrip span {
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  border: var(--border-light);
+  border-radius: 10px;
+  background: var(--yellow);
+  padding: 5px 3px;
+  font-size: 8px;
+  font-weight: 950;
+  line-height: 1.05;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.tealFlow span {
+  background: var(--teal);
+}
+
+.purpleFlow span {
+  background: var(--purple);
+}
+
+.productGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.productCard {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 10px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.productCard .cardButton {
+  grid-column: 1 / -1;
+}
+
+.productVisual {
+  display: grid;
+  min-height: 86px;
+  place-items: center;
+  border: var(--border-light);
+  border-radius: 12px;
+  background: var(--cream);
+  box-shadow: 2px 2px 0 var(--ink);
+  overflow: hidden;
+}
+
+.productVisual span {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: var(--border-light);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 10px;
+  font-weight: 950;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.productCard.pink .productVisual,
+.productCard.pink .priceBadge {
+  background: var(--pink);
+}
+
+.productCard.yellow .productVisual,
+.productCard.yellow .priceBadge {
+  background: var(--yellow);
+}
+
+.productCard.teal .productVisual,
+.productCard.teal .priceBadge {
+  background: var(--teal);
+}
+
+.productCard.purple .productVisual,
+.productCard.purple .priceBadge {
+  background: var(--purple);
+}
+
+.productCopy {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.productCopy h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.priceBadge {
+  background: var(--yellow);
+  padding: 5px 7px;
+}
+
+.formCard,
+.trackCard,
+.confirmationCard {
+  display: grid;
+  gap: 13px;
+  background: var(--surface);
+  padding: 13px;
+}
+
+.formCard.yellow .formIntro span {
+  background: var(--yellow);
+}
+
+.formCard.teal .formIntro span {
+  background: var(--teal);
+}
+
+.formCard.purple .formIntro span {
+  background: var(--purple);
+}
+
+.formIntro {
+  display: grid;
+  gap: 7px;
+}
+
+.requestForm {
+  display: grid;
+  gap: 11px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.fieldGroup {
+  display: grid;
+  gap: 5px;
+}
+
+.fieldGroup.wide {
+  grid-column: 1 / -1;
+}
+
+.fieldGroup span {
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.fieldGroup input,
+.fieldGroup select,
+.fieldGroup textarea {
+  width: 100%;
+  min-height: 42px;
+  border: var(--border-light);
+  border-radius: 10px;
+  background: var(--cream);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 750;
+  outline: none;
+  padding: 9px 10px;
+}
+
+.fieldGroup textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.fieldGroup input:focus,
+.fieldGroup select:focus,
+.fieldGroup textarea:focus {
+  background: var(--surface);
+  box-shadow: 3px 3px 0 var(--pink);
+}
+
+.formError {
+  margin: 0;
+  border: var(--border-light);
+  border-radius: 10px;
+  background: var(--pink);
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.submitButton,
+.secondaryButton,
+.plainButton,
+.cardButton,
+.inlineSwitch {
+  min-height: 44px;
+  border: var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-small);
+  font-size: 0.9rem;
+  font-weight: 950;
+  line-height: 1.1;
+  padding: 10px 12px;
+}
+
+.submitButton,
+.cardButton {
+  background: var(--pink);
+}
+
+.secondaryButton,
+.inlineSwitch {
+  background: var(--yellow);
+}
+
+.plainButton {
+  background: var(--surface);
+}
+
+.inlineSwitch {
+  width: 100%;
+  text-align: center;
+}
+
+.confirmationCard {
+  background: var(--yellow);
+}
+
+.confirmationCard .statusBadge {
+  background: var(--teal);
+}
+
+.requestIdBox {
+  display: grid;
+  gap: 4px;
+  border: var(--border-light);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.requestIdBox small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.requestIdBox strong {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.confirmationActions {
+  display: grid;
+  gap: 9px;
+}
+
+.trackCard .formIntro span,
+.trackResult .statusBadge {
+  background: var(--pink);
+}
+
+.trackResult {
+  display: grid;
+  gap: 9px;
+  border: var(--border-light);
+  border-radius: 13px;
+  background: var(--cream);
+  padding: 11px;
+}
+
+.trackResult.success {
+  background: var(--surface);
+}
+
+.trackResult h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.trackResult dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.trackResult dl div {
+  display: grid;
+  gap: 2px;
+  border-top: var(--border-light);
+  padding-top: 7px;
+}
+
+.trackResult dt {
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.trackResult dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.miniNotice {
+  border: var(--border-light);
+  border-radius: 10px;
+  background: var(--teal);
+  color: var(--ink) !important;
+  padding: 8px;
+}
+
+@media (min-width: 700px) {
+  .screenContent {
+    padding: 18px;
+    padding-bottom: 154px;
+  }
+
+  .productGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .productCard {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 360px) {
+  .screenHeader h1,
+  .formIntro h2,
+  .confirmationCard h2 {
+    font-size: 1.3rem;
+  }
+
+  .flowStrip span {
+    font-size: 7px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
