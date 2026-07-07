@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import ActionCard from "../components/ActionCard";
 import BottomNav, { type NavKey } from "../components/BottomNav";
 import ConfirmationCard from "../components/ConfirmationCard";
@@ -18,6 +18,17 @@ import {
 
 type Screen = NavKey | "canva" | "confirmation";
 
+type OnboardingStep = "welcome" | "customer" | "path" | "info" | "done";
+
+type CustomerType = "Personal / Barkada" | "Business / Team" | "Reorder";
+
+type CustomerProfile = {
+  name: string;
+  contact: string;
+  customerType: CustomerType;
+  orderPath: Screen;
+};
+
 type HomeAction = {
   title: string;
   helper: string;
@@ -33,6 +44,8 @@ type Product = {
   actionLabel: string;
   target: Screen;
 };
+
+const customerTypes: CustomerType[] = ["Personal / Barkada", "Business / Team", "Reorder"];
 
 const actions: HomeAction[] = [
   {
@@ -162,6 +175,10 @@ function getRequestTarget(request?: StoredRequest | null): Screen {
 
 export default function HomePage() {
   const [screen, setScreen] = useState<Screen>("home");
+  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>("welcome");
+  const [customerType, setCustomerType] = useState<CustomerType | "">("");
+  const [selectedPath, setSelectedPath] = useState<Screen>("customize");
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
   const [confirmation, setConfirmation] = useState<StoredRequest | null>(null);
   const [trackQuery, setTrackQuery] = useState("");
   const [cartNotice, setCartNotice] = useState(false);
@@ -186,12 +203,125 @@ export default function HomePage() {
       setTrackQuery("");
     }
     setCartNotice(false);
+    setOnboardingStep("done");
     setScreen(nextScreen);
   }
 
   function showCartNotice() {
     setCartNotice(true);
     window.setTimeout(() => setCartNotice(false), 2200);
+  }
+  function chooseCustomerType(type: CustomerType) {
+    setCustomerType(type);
+    if (type === "Business / Team") {
+      setSelectedPath("uniforms");
+    }
+
+    if (type === "Reorder") {
+      setSelectedPath("track");
+    }
+
+    setOnboardingStep("path");
+  }
+
+  function chooseOrderPath(path: Screen) {
+    setSelectedPath(path);
+    setOnboardingStep("info");
+  }
+
+  function submitBasicInfo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("customerName") ?? "").trim();
+    const contact = String(formData.get("contact") ?? "").trim();
+
+    if (!name || !contact || !customerType) {
+      return;
+    }
+
+    setCustomerProfile({
+      name,
+      contact,
+      customerType,
+      orderPath: selectedPath,
+    });
+    setOnboardingStep("done");
+    setScreen(selectedPath);
+  }
+
+  function renderOnboarding() {
+    if (onboardingStep === "customer") {
+      return (
+        <section className="onboardingCard" aria-labelledby="customer-type-title">
+          <span className="stepBadge">Step 2 / Customer Type</span>
+          <h1 id="customer-type-title">Who are we making for?</h1>
+          <p>Pick the lane so TRRY can guide you faster.</p>
+          <div className="choiceGrid">
+            {customerTypes.map((type) => (
+              <button className="choiceCard" key={type} onClick={() => chooseCustomerType(type)} type="button">
+                <strong>{type}</strong>
+                <small>{type === "Business / Team" ? "Uniforms, staff shirts, bulk orders" : type === "Reorder" ? "Track or repeat a past request" : "One shirt, gifts, drops, barkada tees"}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    if (onboardingStep === "path") {
+      return (
+        <section className="onboardingCard" aria-labelledby="order-path-title">
+          <span className="stepBadge">Step 3 / Order Path</span>
+          <h1 id="order-path-title">Choose your order path.</h1>
+          <p>Product muna, then name/design, upload or Canva, print type, submit, approve proof, reorder.</p>
+          <div className="choiceGrid pathGrid">
+            {actions.map((action) => (
+              <button
+                className={`choiceCard ${action.tone}`}
+                key={action.title}
+                onClick={() => chooseOrderPath(action.screen)}
+                type="button"
+              >
+                <strong>{action.title}</strong>
+                <small>{action.helper}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    if (onboardingStep === "info") {
+      return (
+        <section className="onboardingCard" aria-labelledby="basic-info-title">
+          <span className="stepBadge">Step 4 / Basic Info</span>
+          <h1 id="basic-info-title">Last bit. Para ma-contact ka.</h1>
+          <p>This only personalizes the demo app. Your full request still happens in the next section.</p>
+          <form className="basicInfoForm" onSubmit={submitBasicInfo}>
+            <label className="fieldGroup wide">
+              <span>Name *</span>
+              <input name="customerName" placeholder="Your name" required type="text" />
+            </label>
+            <label className="fieldGroup wide">
+              <span>Contact or Messenger *</span>
+              <input name="contact" placeholder="Phone or Messenger" required type="text" />
+            </label>
+            <button className="submitButton" type="submit">Go to My Section</button>
+          </form>
+        </section>
+      );
+    }
+
+    return (
+      <section className="onboardingCard welcomeCard" aria-labelledby="welcome-title">
+        <span className="stepBadge">Step 1 / Welcome</span>
+        <h1 id="welcome-title">Welcome to the TRRY Custom Lab.</h1>
+        <p>Choose product, add name/design, upload or send Canva, pick DTF or embroidery, submit, approve proof, then reorder anytime.</p>
+        <button className="submitButton" onClick={() => setOnboardingStep("customer")} type="button">
+          Start Na
+        </button>
+      </section>
+    );
   }
 
   function submitRequest(
@@ -228,6 +358,16 @@ export default function HomePage() {
   function renderHome() {
     return (
       <>
+        {customerProfile ? (
+          <section className="dashboardCard" aria-label="Personalized TRRY dashboard">
+            <span className="stepBadge">My TRRY Lab</span>
+            <h2>Hi {customerProfile.name}, ready na?</h2>
+            <p>{customerProfile.customerType} / {actions.find((action) => action.screen === customerProfile.orderPath)?.title ?? "Custom order"}</p>
+            <button className="secondaryButton" onClick={() => navigate(customerProfile.orderPath)} type="button">
+              Continue My Path
+            </button>
+          </section>
+        ) : null}
         <Hero />
 
         <section className="actionSection" aria-labelledby="action-heading">
@@ -412,14 +552,22 @@ export default function HomePage() {
       </header>
       {cartNotice ? <div className="headerNotice" role="status">Cart coming soon</div> : null}
 
-      <section className={screen === "home" ? "homeContent" : "screenContent"}>
-        {renderScreen()}
-      </section>
+      {onboardingStep !== "done" ? (
+        <section className="homeContent onboardingContent">{renderOnboarding()}</section>
+      ) : (
+        <>
+          <section className={screen === "home" ? "homeContent" : "screenContent"}>
+            {renderScreen()}
+          </section>
 
-      <BottomNav active={activeNav} onNavigate={navigate} />
+          <BottomNav active={activeNav} onNavigate={navigate} />
+        </>
+      )}
     </main>
   );
 }
+
+
 
 
 
