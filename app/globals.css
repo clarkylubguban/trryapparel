@@ -1,0 +1,348 @@
+:root {
+  --bg: #fff4e6;
+  --surface: #ffffff;
+  --cream: #fff9ec;
+  --ink: #111111;
+  --pink: #ff5f73;
+  --teal: #42d6c9;
+  --yellow: #ffe766;
+  --purple: #8d78ff;
+  --muted: #56504a;
+  --border: 3px solid var(--ink);
+  --border-light: 2px solid var(--ink);
+  --shadow: 6px 6px 0 var(--ink);
+  --shadow-small: 3px 3px 0 var(--ink);
+  --radius: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    linear-gradient(90deg, rgba(17, 17, 17, 0.035) 1px, transparent 1px),
+    linear-gradient(rgba(17, 17, 17, 0.035) 1px, transparent 1px),
+    var(--bg);
+  background-size: 22px 22px;
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.appShell {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding-bottom: 112px;
+  background: rgba(255, 244, 230, 0.94);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border-bottom: var(--border);
+  background: var(--cream);
+}
+
+.brandName,
+.headerTitle,
+.mvpBadge {
+  font-weight: 950;
+  line-height: 1;
+}
+
+.brandName {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.headerTitle {
+  max-width: 138px;
+  text-align: center;
+  font-size: 11px;
+}
+
+.mvpBadge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 30px;
+  border: var(--border);
+  border-radius: 999px;
+  background: var(--yellow);
+  box-shadow: var(--shadow-small);
+  font-size: 11px;
+}
+
+.homeContent {
+  display: grid;
+  gap: 14px;
+  padding: 12px;
+  padding-bottom: 130px;
+}
+
+.heroCard {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 10px;
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.heroCard::before,
+.heroCard::after {
+  content: "";
+  position: absolute;
+  border: var(--border);
+  pointer-events: none;
+}
+
+.heroCard::before {
+  top: 14px;
+  right: 12px;
+  width: 58px;
+  height: 34px;
+  border-radius: 14px;
+  background: var(--teal);
+  box-shadow: var(--shadow-small);
+  transform: rotate(4deg);
+}
+
+.heroCard::after {
+  right: 46px;
+  bottom: 18px;
+  width: 40px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--purple);
+  transform: rotate(-7deg);
+}
+
+.heroCard > * {
+  position: relative;
+  z-index: 1;
+}
+
+.heroBadge,
+.sectionIntro span,
+.pillRow span {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: var(--border-light);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.heroBadge {
+  border-width: 3px;
+  background: var(--pink);
+  box-shadow: var(--shadow-small);
+  padding: 6px 9px;
+}
+
+.heroCard h1 {
+  max-width: 92%;
+  margin: 0;
+  font-size: clamp(2rem, 10vw, 2.7rem);
+  line-height: 0.94;
+  letter-spacing: -0.045em;
+}
+
+.heroCard p {
+  max-width: 92%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.pillRow span {
+  padding: 7px 9px;
+  font-size: 10px;
+}
+
+.pillRow span:first-child {
+  background: var(--teal);
+}
+
+.pillRow span:last-child {
+  background: var(--yellow);
+}
+
+.actionSection {
+  display: grid;
+  gap: 10px;
+}
+
+.sectionIntro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sectionIntro span {
+  background: var(--teal);
+  padding: 6px 8px;
+}
+
+.sectionIntro h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  text-align: right;
+}
+
+.actionGrid {
+  display: grid;
+  gap: 9px;
+}
+
+.actionCard {
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  border: var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-small);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.actionCard span {
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.actionCard small {
+  color: rgba(17, 17, 17, 0.72);
+  font-size: 0.75rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.actionCard.pink {
+  background: var(--pink);
+}
+
+.actionCard.yellow {
+  background: var(--yellow);
+}
+
+.actionCard.teal {
+  background: var(--teal);
+}
+
+.actionCard.purple {
+  background: var(--purple);
+}
+
+.actionCard.cream {
+  background: #fffdf7;
+}
+
+.bottomNav {
+  position: fixed;
+  left: 50%;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 20;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  width: min(400px, calc(100% - 32px));
+  border: var(--border-light);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: var(--shadow-small);
+  padding: 4px;
+}
+
+.bottomNav button {
+  min-width: 0;
+  min-height: 34px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  padding: 5px 1px;
+  font-size: 9px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.bottomNav button.active {
+  border-color: var(--ink);
+  background: var(--pink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+@media (min-width: 700px) {
+  .appShell {
+    margin-top: 22px;
+    margin-bottom: 22px;
+    border: var(--border);
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 10px 10px 0 var(--ink);
+  }
+
+  .homeContent {
+    padding: 18px;
+    padding-bottom: 132px;
+  }
+
+  .actionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actionCard:first-child {
+    grid-column: 1 / -1;
+  }
+}

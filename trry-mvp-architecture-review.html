@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRRY MVP Architecture Review</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        --bg: #f4f4f5;
+        --panel: #ffffff;
+        --ink: #111111;
+        --muted: #6b7280;
+        --line: #e5e7eb;
+        --soft: #fafafa;
+        --accent: #ff3b7f;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      .page {
+        width: min(1120px, 100%);
+        margin: 0 auto;
+        padding: 18px;
+      }
+
+      .reviewHeader {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .reviewHeader h1 {
+        margin: 0;
+        font-size: clamp(28px, 8vw, 54px);
+        line-height: 1;
+        letter-spacing: -0.04em;
+      }
+
+      .reviewHeader p,
+      .reviewCard p,
+      .screenNote {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .eyebrow,
+      .tag {
+        margin: 0;
+        color: var(--accent);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .reviewGrid {
+        display: grid;
+        gap: 12px;
+        margin: 18px 0 24px;
+      }
+
+      .reviewCard {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 16px;
+      }
+
+      .reviewCard h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+
+      .reviewCard ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .screens {
+        display: grid;
+        gap: 18px;
+      }
+
+      .screenBlock {
+        display: grid;
+        gap: 10px;
+      }
+
+      .screenBlock > h2 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: -0.02em;
+      }
+
+      .phone {
+        position: relative;
+        width: min(100%, 390px);
+        margin: 0 auto;
+        min-height: 680px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 30px;
+        overflow: hidden;
+        box-shadow: 0 22px 70px rgba(0, 0, 0, 0.12);
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: rgba(255, 255, 255, 0.94);
+        border-bottom: 1px solid var(--line);
+        padding: 11px 16px;
+      }
+
+      .topbar h3 {
+        margin: 2px 0 0;
+        font-size: 15px;
+        letter-spacing: -0.02em;
+      }
+
+      .content {
+        padding: 14px;
+        padding-bottom: 92px;
+      }
+
+      .hero {
+        background: var(--ink);
+        color: #ffffff;
+        border-radius: 20px;
+        padding: 20px 18px;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
+      }
+
+      .hero h2,
+      .pageHead h2,
+      .formCard h2,
+      .successCard h2 {
+        margin: 9px 0;
+        font-size: 25px;
+        line-height: 1.06;
+        letter-spacing: -0.035em;
+      }
+
+      .hero p {
+        margin: 0;
+        color: #d4d4d8;
+        line-height: 1.45;
+      }
+
+      .ctaGrid {
+        display: grid;
+        gap: 8px;
+        margin-top: 15px;
+      }
+
+      .ctaGrid button {
+        border: 0;
+        background: #ffffff;
+        color: var(--ink);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-weight: 800;
+        text-align: left;
+      }
+
+      .ctaGrid button:first-child,
+      .submitBtn,
+      .successCard button,
+      .bottomNav .active {
+        background: var(--accent);
+        color: #ffffff;
+      }
+
+      .sectionTitle {
+        margin: 20px 0 10px;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+
+      .serviceGrid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .serviceCard,
+      .productCard,
+      .formCard,
+      .successCard {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+      }
+
+      .serviceCard {
+        min-height: 104px;
+        padding: 11px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.035);
+      }
+
+      .serviceCard span {
+        display: inline-grid;
+        place-items: center;
+        width: 42px;
+        height: 28px;
+        border-radius: 9px;
+        background: var(--ink);
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+      }
+
+      .serviceCard h3 {
+        margin: 8px 0 3px;
+        font-size: 14px;
+        line-height: 1.15;
+      }
+
+      .serviceCard p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.3;
+      }
+
+      .pageHead {
+        margin-bottom: 14px;
+      }
+
+      .pageHead p,
+      .formCard p,
+      .successCard p,
+      .productCard p {
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .productGrid {
+        display: grid;
+        gap: 10px;
+      }
+
+      .productCard {
+        padding: 15px;
+      }
+
+      .shirtMockup {
+        height: 104px;
+        border-radius: 14px;
+        background: linear-gradient(145deg, #111111, #3f3f46);
+        color: white;
+        display: grid;
+        place-items: center;
+        font-size: 26px;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+        margin-bottom: 13px;
+      }
+
+      .productCard h3 {
+        margin: 6px 0 4px;
+      }
+
+      .productFooter {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 13px;
+      }
+
+      .productFooter button {
+        border: 0;
+        background: var(--ink);
+        color: white;
+        border-radius: 999px;
+        padding: 9px 12px;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .formCard {
+        padding: 15px;
+      }
+
+      .formGrid {
+        display: grid;
+        gap: 9px;
+        margin: 14px 0;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid #d4d4d8;
+        background: var(--soft);
+        color: var(--ink);
+        border-radius: 12px;
+        padding: 11px 12px;
+      }
+
+      textarea {
+        min-height: 92px;
+      }
+
+      .submitBtn,
+      .successCard button {
+        width: 100%;
+        min-height: 46px;
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-weight: 900;
+      }
+
+      .successCard {
+        text-align: center;
+        padding: 28px 19px;
+      }
+
+      .check {
+        width: 62px;
+        height: 62px;
+        margin: 0 auto 16px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: var(--ink);
+        color: white;
+        font-size: 26px;
+        font-weight: 900;
+      }
+
+      .bottomNav {
+        position: absolute;
+        left: 50%;
+        bottom: 10px;
+        transform: translateX(-50%);
+        width: calc(100% - 30px);
+        background: var(--ink);
+        border-radius: 18px;
+        padding: 5px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 4px;
+      }
+
+      .bottomNav span {
+        display: grid;
+        place-items: center;
+        min-height: 40px;
+        border-radius: 12px;
+        color: #a1a1aa;
+        font-size: 9px;
+        font-weight: 800;
+      }
+
+      @media (min-width: 760px) {
+        .reviewGrid {
+          grid-template-columns: repeat(3, 1fr);
+        }
+
+        .screens {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          align-items: start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="reviewHeader">
+        <p class="eyebrow">TRRY Apparel MVP Review</p>
+        <h1>Architecture and Static UI Snapshot</h1>
+        <p>
+          This document is a standalone review artifact for observing the TRRY Apparel MVP direction. It does not power the app, submit data, or replace the existing Vite React prototype.
+        </p>
+      </section>
+
+      <section class="reviewGrid" aria-label="Project summary">
+        <article class="reviewCard">
+          <h2>Project Overview</h2>
+          <p>
+            TRRY Apparel is a mobile-first customer ordering prototype for statement tees, custom shirts, Canva design submissions, uniform inquiries, and order tracking placeholders.
+          </p>
+        </article>
+        <article class="reviewCard">
+          <h2>Architecture Summary</h2>
+          <p>
+            The current app is a Vite + React single-page MVP. Screen state lives in React, mock products and services are local data, and forms route to a local Request Received screen.
+          </p>
+        </article>
+        <article class="reviewCard">
+          <h2>Current Screens</h2>
+          <ul>
+            <li>Home</li>
+            <li>Shop Statement Tees</li>
+            <li>Customize Shirt</li>
+            <li>Send Canva Link</li>
+            <li>Uniform Inquiry</li>
+            <li>Track My Order</li>
+            <li>Request Received</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="screens" aria-label="Static screen snapshots">
+        <article class="screenBlock">
+          <h2>Home</h2>
+          <p class="screenNote">Primary customer entry with CTA buttons and compact service menu.</p>
+          <div class="phone">
+            <div class="topbar"><p class="eyebrow">TRRY APPAREL</p><h3>Order & Customization App</h3></div>
+            <div class="content">
+              <div class="hero">
+                <p class="tag">Fast local apparel service</p>
+                <h2>Customize Your Shirt. Send Your Design. We'll Make It Real.</h2>
+                <p>Order statement tees, send your Canva link, or request uniforms from TRRY Apparel.</p>
+                <div class="ctaGrid">
+                  <button>Shop Statement Tees</button>
+                  <button>Customize a Shirt</button>
+                  <button>Send Canva Link</button>
+                  <button>Uniform Inquiry</button>
+                  <button>Track My Order</button>
+                </div>
+              </div>
+              <h3 class="sectionTitle">Services</h3>
+              <div class="serviceGrid">
+                <div class="serviceCard"><span>DTF</span><div><h3>DTF Printing</h3><p>Fast full-color prints</p></div></div>
+                <div class="serviceCard"><span>EMB</span><div><h3>Embroidery</h3><p>Premium stitched logos</p></div></div>
+                <div class="serviceCard"><span>SCR</span><div><h3>Screen Print</h3><p>Bulk shirt printing</p></div></div>
+                <div class="serviceCard"><span>UNI</span><div><h3>Uniforms</h3><p>Company/team orders</p></div></div>
+              </div>
+            </div>
+            <div class="bottomNav"><span class="active">Home</span><span>Shop</span><span>Customize</span><span>Uniforms</span><span>Track</span></div>
+          </div>
+        </article>
+
+        <article class="screenBlock">
+          <h2>Shop Statement Tees</h2>
+          <p class="screenNote">Mock product list with request-order actions.</p>
+          <div class="phone">
+            <div class="topbar"><p class="eyebrow">TRRY APPAREL</p><h3>Order & Customization App</h3></div>
+            <div class="content">
+              <div class="pageHead"><p class="eyebrow">Statement / Slogan Tees</p><h2>Choose a tee, then request your order.</h2><p>No payment yet. TRRY will confirm price, size, and schedule.</p></div>
+              <div class="productGrid">
+                <div class="productCard"><div class="shirtMockup">TEE</div><h3>Everyday Statement Tee</h3><p>Black / White / Cream</p><div class="productFooter"><strong>PHP 299</strong><button>Request Order</button></div></div>
+                <div class="productCard"><div class="shirtMockup">TEE</div><h3>Local Pride Tee</h3><p>Black / Royal Blue</p><div class="productFooter"><strong>PHP 299</strong><button>Request Order</button></div></div>
+              </div>
+            </div>
+            <div class="bottomNav"><span>Home</span><span class="active">Shop</span><span>Customize</span><span>Uniforms</span><span>Track</span></div>
+          </div>
+        </article>
+
+        <article class="screenBlock">
+          <h2>Customize Shirt Form</h2>
+          <p class="screenNote">Customer custom shirt request details.</p>
+          <div class="phone">
+            <div class="topbar"><p class="eyebrow">TRRY APPAREL</p><h3>Order & Customization App</h3></div>
+            <div class="content">
+              <form class="formCard">
+                <p class="eyebrow">TRRY Request Form</p><h2>Customize a Shirt</h2><p>Send your product details, design, and deadline.</p>
+                <div class="formGrid"><input placeholder="Full name" /><input placeholder="Contact number or Messenger name" /><select><option>Product type</option></select><input placeholder="Shirt color" /><select><option>Size</option></select><input placeholder="Quantity" /><select><option>Print type</option></select><input placeholder="Canva link, optional" /><textarea placeholder="Notes"></textarea><input placeholder="Deadline date" /></div>
+                <button class="submitBtn">Submit Request</button>
+              </form>
+            </div>
+            <div class="bottomNav"><span>Home</span><span>Shop</span><span class="active">Customize</span><span>Uniforms</span><span>Track</span></div>
+          </div>
+        </article>
+
+        <article class="screenBlock">
+          <h2>Send Canva Link Form</h2>
+          <p class="screenNote">Focused flow for pasted Canva design links.</p>
+          <div class="phone">
+            <div class="topbar"><p class="eyebrow">TRRY APPAREL</p><h3>Order & Customization App</h3></div>
+            <div class="content"><form class="formCard"><p class="eyebrow">TRRY Request Form</p><h2>Send Canva Link</h2><p>Paste your Canva link and tell us what product it is for.</p><div class="formGrid"><input placeholder="Full name" /><input placeholder="Contact number" /><input placeholder="Canva link" /><input placeholder="What product is this for?" /><input placeholder="Quantity" /><textarea placeholder="Notes"></textarea></div><button class="submitBtn">Submit Canva Link</button></form></div>
+            <div class="bottomNav"><span>Home</span><span>Shop</span><span class="active">Customize</span><span>Uniforms</span><span>Track</span></div>
+          </div>
+        </article>
+
+        <article class="screenBlock">
+          <h2>Uniform Inquiry Form</h2>
+          <p class="screenNote">Business request flow for uniforms and logo placement.</p>
+          <div class="phone">
+            <div class="topbar"><p class="eyebrow">TRRY APPAREL</p><h3>Order & Customization App</h3></div>
+            <div class="content"><form class="formCard"><p class="eyebrow">TRRY Request Form</p><h2>Uniform Inquiry</h2><p>For companies, teams, schools, shops, and organizations.</p><div class="formGrid"><input placeholder="Company / business name" /><input placeholder="Contact person" /><input placeholder="Contact number" /><input placeholder="Type of uniform" /><input placeholder="Quantity estimate" /><input placeholder="Logo placement" /><select><option>Preferred service</option></select><input placeholder="Deadline" /><textarea placeholder="Notes"></textarea></div><button class="submitBtn">Submit Inquiry</button></form></div>
+            <div class="bottomNav"><span>Home</span><span>Shop</span><span>Customize</span><span class="active">Uniforms</span><span>Track</span></div>
+          </div>
+        </article>
+
+        <article class="screenBlock">
+          <h2>Track My Order</h2>
+          <p class="screenNote">MVP placeholder for future tracking.</p>
+          <div class="phone">
+            <div class="topbar"><p class="eyebrow">TRRY APPAREL</p><h3>Order & Customization App</h3></div>
+            <div class="content"><div class="formCard"><p class="eyebrow">Order Tracking</p><h2>Track My Order</h2><p>Order tracking is coming soon. For now, message TRRY Apparel for updates.</p><div class="formGrid"><input placeholder="Order code or contact number" /></div><button class="submitBtn">Contact TRRY</button></div></div>
+            <div class="bottomNav"><span>Home</span><span>Shop</span><span>Customize</span><span>Uniforms</span><span class="active">Track</span></div>
+          </div>
+        </article>
+
+        <article class="screenBlock">
+          <h2>Request Received</h2>
+          <p class="screenNote">Shared success screen after form submission.</p>
+          <div class="phone">
+            <div class="topbar"><p class="eyebrow">TRRY APPAREL</p><h3>Order & Customization App</h3></div>
+            <div class="content"><div class="successCard"><div class="check">OK</div><h2>Request received.</h2><p>TRRY Apparel will review your details and confirm the price, design, and production schedule.</p><button>Back to Home</button></div></div>
+            <div class="bottomNav"><span>Home</span><span>Shop</span><span>Customize</span><span>Uniforms</span><span>Track</span></div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
