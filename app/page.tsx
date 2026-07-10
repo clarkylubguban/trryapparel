@@ -7,6 +7,7 @@ type Method = "DTF Transfer" | "Embroidery" | "Screen Print";
 type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "2XL";
 type UploadStatus = "idle" | "ready" | "error";
 type ArtworkSource = "upload" | "canva" | "send-later";
+type ArtworkUploadStatus = "not-needed" | "uploaded" | "failed";
 type InquiryStatus = "FOR REVIEW" | "IN PRODUCTION" | "DELIVERED";
 
 type SizeRun = Record<SizeKey, number>;
@@ -40,6 +41,9 @@ type Inquiry = {
   canvaLink: string;
   artworkName: string;
   artworkSource: ArtworkSource;
+  artworkStoragePath: string;
+  artworkUploadStatus: ArtworkUploadStatus;
+  artworkUploadedAt: string;
   previousReference: string;
   neededDate: string;
   notes: string;
@@ -75,6 +79,8 @@ const COLORS = [
 
 const SIZES: SizeKey[] = ["XS", "S", "M", "L", "XL", "2XL"];
 const EMPTY_SIZE_RUN: SizeRun = { XS: 0, S: 0, M: 0, L: 0, XL: 0, "2XL": 0 };
+const ARTWORK_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf", "svg", "ai", "eps", "psd"]);
+const MAX_ARTWORK_SIZE = 15 * 1024 * 1024;
 
 function createSizeRunForProduct(product: Product): SizeRun {
   const nextSizeRun = { ...EMPTY_SIZE_RUN };
@@ -108,6 +114,26 @@ function formatCustomerDate(value: string) {
 function cleanPhone(value: string) {
   return value.trim().toLowerCase();
 }
+
+function getFileExtension(filename: string) {
+  const match = filename.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match ? match[1] : "";
+}
+
+function getArtworkStateLabel(inquiry: Inquiry | null | undefined) {
+  if (!inquiry) return "Artwork will be sent later";
+  if (inquiry.artworkSource === "canva") return "Canva link submitted";
+  if (inquiry.artworkSource === "send-later") return "Artwork will be sent later";
+  if (inquiry.artworkUploadStatus === "failed") return "Artwork upload needs retry";
+  return "Artwork uploaded";
+}
+
+function getArtworkUploadStatus(item: Record<string, unknown>, source: ArtworkSource): ArtworkUploadStatus {
+  if (item.artworkUploadStatus === "uploaded" || item.artworkUploadStatus === "failed" || item.artworkUploadStatus === "not-needed") return item.artworkUploadStatus;
+  if (source !== "upload") return "not-needed";
+  return "uploaded";
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -139,6 +165,7 @@ function getStoredInquiries(): Inquiry[] {
       if (!ref || !productName || !Number.isFinite(totalPieces) || typeof item.status !== "string") return [];
 
       const method: Method = item.method === "Embroidery" || item.method === "Screen Print" || item.method === "DTF Transfer" ? item.method : "DTF Transfer";
+      const artworkSource = getArtworkSource(item);
 
       return [{
         ref,
@@ -153,7 +180,10 @@ function getStoredInquiries(): Inquiry[] {
         totalPieces,
         canvaLink: typeof item.canvaLink === "string" ? item.canvaLink : "",
         artworkName: typeof item.artworkName === "string" ? item.artworkName : "",
-        artworkSource: getArtworkSource(item),
+        artworkSource,
+        artworkStoragePath: typeof item.artworkStoragePath === "string" ? item.artworkStoragePath : "",
+        artworkUploadStatus: getArtworkUploadStatus(item, artworkSource),
+        artworkUploadedAt: typeof item.artworkUploadedAt === "string" ? item.artworkUploadedAt : "",
         previousReference: typeof item.previousReference === "string" ? item.previousReference : "",
         neededDate: typeof item.neededDate === "string" ? item.neededDate : "",
         notes: typeof item.notes === "string" ? item.notes : "",
@@ -180,6 +210,7 @@ export default function HomePage() {
   const [sizeRun, setSizeRun] = useState<SizeRun>(EMPTY_SIZE_RUN);
   const [canvaLink, setCanvaLink] = useState("");
   const [artworkName, setArtworkName] = useState("");
+  const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
   const [artworkLater, setArtworkLater] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
   const [uploadMessage, setUploadMessage] = useState("");
@@ -191,6 +222,8 @@ export default function HomePage() {
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStage, setSubmitStage] = useState<"idle" | "submitting" | "uploading">("idle");
+  const [retryingArtwork, setRetryingArtwork] = useState(false);
   const [submittedInquiry, setSubmittedInquiry] = useState<Inquiry | null>(null);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [trackRef, setTrackRef] = useState("");
@@ -213,6 +246,7 @@ export default function HomePage() {
   const moqMet = totalPieces >= requiredMoq;
   const hasArtworkPlan = Boolean(artworkName || canvaLink.trim() || artworkLater);
   const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
+  const submitButtonText = isSubmitting ? submitStage === "uploading" ? "UPLOADING ARTWORK" : "SUBMITTING" : "SUBMIT INQUIRY";
   const matchedInquiry = inquiries.find((item) => item.ref.toLowerCase() === trackRef.trim().toLowerCase() && cleanPhone(item.customerContact) === cleanPhone(trackContact));
   const messengerLink = `${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I want to ask about inquiry ${submittedInquiry?.ref || trackRef || ""}.`)}`;
 
@@ -223,6 +257,7 @@ export default function HomePage() {
     setSizeRun(createSizeRunForProduct(product));
     setCanvaLink("");
     setArtworkName("");
+    setSelectedArtworkFile(null);
     setUploadStatus("idle");
     setUploadMessage("");
     setArtworkLater(false);
@@ -232,6 +267,7 @@ export default function HomePage() {
     setRightsConfirmed(false);
     setFormError("");
     setIsSubmitting(false);
+    setSubmitStage("idle");
   }
 
   function openCatalog() {
@@ -249,18 +285,91 @@ export default function HomePage() {
 
   function handleUpload(file: File | undefined) {
     if (!file) return;
-    const allowed = ["image/png", "image/jpeg", "application/pdf", "image/svg+xml"];
-    if (!allowed.includes(file.type)) {
+
+    const extension = getFileExtension(file.name);
+    if (!ARTWORK_EXTENSIONS.has(extension)) {
+      setSelectedArtworkFile(null);
       setArtworkName("");
       setUploadStatus("error");
-      setUploadMessage("File format not supported. Upload PNG, JPG, PDF, or SVG.");
+      setUploadMessage("Unsupported format. Upload PNG, JPG, PDF, SVG, AI, EPS, or PSD.");
       return;
     }
+
+    if (file.size <= 0) {
+      setSelectedArtworkFile(null);
+      setArtworkName("");
+      setUploadStatus("error");
+      setUploadMessage("Artwork file is empty. Please choose another file.");
+      return;
+    }
+
+    if (file.size > MAX_ARTWORK_SIZE) {
+      setSelectedArtworkFile(null);
+      setArtworkName("");
+      setUploadStatus("error");
+      setUploadMessage("Artwork file is too large. Upload a file up to 15 MB.");
+      return;
+    }
+
+    setSelectedArtworkFile(file);
     setArtworkName(file.name);
     setUploadStatus("ready");
-    setUploadMessage("Artwork saved locally for inquiry preview.");
+    setUploadMessage("Artwork ready for private upload after inquiry submission.");
   }
 
+  async function uploadArtworkForInquiry(reference: string, contact: string, file: File) {
+    const formData = new FormData();
+    formData.append("reference", reference);
+    formData.append("contact", contact);
+    formData.append("file", file);
+
+    const response = await fetch("/api/inquiry-artworks", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await response.json().catch(() => ({})) as { storagePath?: string; originalFilename?: string; uploadedAt?: string; error?: string };
+
+    if (!response.ok || !result.storagePath) {
+      throw new Error(result.error || "Artwork upload failed. Please try again.");
+    }
+
+    return result;
+  }
+
+  function saveInquiryUpdate(updatedInquiry: Inquiry) {
+    const nextList = [updatedInquiry, ...getStoredInquiries().filter((item) => item.ref !== updatedInquiry.ref)].slice(0, 20);
+    saveStoredInquiries(nextList);
+    setInquiries(nextList);
+    setSubmittedInquiry(updatedInquiry);
+  }
+
+  async function retryArtworkUpload() {
+    if (!submittedInquiry || submittedInquiry.artworkSource !== "upload") return;
+    if (!selectedArtworkFile) {
+      setFormError("Choose the artwork file again from the form to retry upload.");
+      return;
+    }
+
+    setRetryingArtwork(true);
+    setFormError("");
+
+    try {
+      const uploadResult = await uploadArtworkForInquiry(submittedInquiry.ref, submittedInquiry.customerContact, selectedArtworkFile);
+      const updatedInquiry: Inquiry = {
+        ...submittedInquiry,
+        artworkName: uploadResult.originalFilename || submittedInquiry.artworkName,
+        artworkStoragePath: uploadResult.storagePath,
+        artworkUploadStatus: "uploaded",
+        artworkUploadedAt: uploadResult.uploadedAt || new Date().toISOString(),
+      };
+      saveInquiryUpdate(updatedInquiry);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Artwork upload failed. Please try again.");
+    } finally {
+      setRetryingArtwork(false);
+    }
+  }
   async function submitInquiry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) {
@@ -273,10 +382,16 @@ export default function HomePage() {
       return;
     }
 
+    const artworkSource: ArtworkSource = artworkName ? "upload" : canvaLink.trim() ? "canva" : "send-later";
+    if (artworkSource === "upload" && !selectedArtworkFile) {
+      setFormError("Choose the artwork file again before submitting.");
+      return;
+    }
+
     setIsSubmitting(true);
+    setSubmitStage("submitting");
     setFormError("");
 
-    const artworkSource: ArtworkSource = artworkName ? "upload" : canvaLink.trim() ? "canva" : "send-later";
     const customerSubmittedAt = new Date().toISOString();
 
     try {
@@ -311,6 +426,26 @@ export default function HomePage() {
         throw new Error(result.error || "Unable to submit inquiry right now. Please try again.");
       }
 
+      let artworkStoragePath = "";
+      let artworkUploadStatus: ArtworkUploadStatus = artworkSource === "upload" ? "failed" : "not-needed";
+      let artworkUploadedAt = "";
+      let uploadedArtworkName = artworkLater && !artworkName ? "Send artwork later" : artworkName;
+      let uploadFailureMessage = "";
+
+      if (artworkSource === "upload" && selectedArtworkFile) {
+        setSubmitStage("uploading");
+        try {
+          const uploadResult = await uploadArtworkForInquiry(result.reference, customerContact.trim(), selectedArtworkFile);
+          artworkStoragePath = uploadResult.storagePath;
+          artworkUploadStatus = "uploaded";
+          artworkUploadedAt = uploadResult.uploadedAt || new Date().toISOString();
+          uploadedArtworkName = uploadResult.originalFilename || uploadedArtworkName;
+        } catch (error) {
+          uploadFailureMessage = error instanceof Error ? error.message : "Artwork upload failed. Please try again.";
+          artworkUploadStatus = "failed";
+        }
+      }
+
       window.localStorage.setItem("customerName", customerName.trim());
       window.localStorage.setItem("customerContact", customerContact.trim());
 
@@ -327,8 +462,11 @@ export default function HomePage() {
         sizeRun,
         totalPieces,
         canvaLink: canvaLink.trim(),
-        artworkName: artworkLater && !artworkName ? "Send artwork later" : artworkName,
+        artworkName: uploadedArtworkName,
         artworkSource,
+        artworkStoragePath,
+        artworkUploadStatus,
+        artworkUploadedAt,
         previousReference: previousReference.trim(),
         neededDate,
         notes: notes.trim(),
@@ -344,11 +482,13 @@ export default function HomePage() {
       setSubmittedInquiry(nextInquiry);
       setTrackRef(nextInquiry.ref);
       setTrackContact(nextInquiry.customerContact);
+      setFormError(uploadFailureMessage ? `Inquiry received, but ${uploadFailureMessage}` : "");
       setScreen("submitted");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Unable to submit inquiry right now. Please try again.");
     } finally {
       setIsSubmitting(false);
+      setSubmitStage("idle");
     }
   }
   function BottomNav({ active }: { active: "home" | "catalog" | "myInquiries" }) {
@@ -457,7 +597,7 @@ export default function HomePage() {
 
           <section className="formSection artworkSection">
             <h2>UPLOAD DESIGN</h2>
-            <label className="uploadDrop"><input accept=".png,.jpg,.jpeg,.pdf,.svg" onChange={(event) => handleUpload(event.target.files?.[0])} type="file" /><strong>{artworkName || "DROP YOUR FILE HERE"}</strong><small>Accepted: PNG, JPG, PDF, SVG</small></label>
+            <label className="uploadDrop"><input accept=".png,.jpg,.jpeg,.pdf,.svg,.ai,.eps,.psd" onChange={(event) => handleUpload(event.target.files?.[0])} type="file" /><strong>{artworkName || "DROP YOUR FILE HERE"}</strong><small>Accepted: PNG, JPG, PDF, SVG, AI, EPS, PSD</small></label>
             {uploadStatus === "ready" ? <p className="uploadState good">Artwork ready for review.</p> : null}
             {uploadStatus === "error" ? <p className="uploadState bad">{uploadMessage}</p> : null}
             <label className="stackedField"><span>CANVA LINK OPTIONAL</span><input aria-invalid={!canvaValid} placeholder="https://canva.com/design/..." value={canvaLink} onChange={(event) => setCanvaLink(event.target.value)} /></label>
@@ -495,7 +635,7 @@ export default function HomePage() {
 
           <div className="stickySubmit">
             <span>TOTAL: {totalPieces} PCS</span>
-            <button className="limeCta" disabled={!canSubmit} type="submit">{isSubmitting ? "SUBMITTING" : "SUBMIT INQUIRY"}</button>
+            <button className="limeCta" disabled={!canSubmit} type="submit">{submitButtonText}</button>
           </div>
         </form>
       </section>
@@ -517,9 +657,12 @@ export default function HomePage() {
             <div><dt>TOTAL PIECES</dt><dd>{current?.totalPieces}</dd></div>
             <div><dt>METHOD</dt><dd>{current?.method}</dd></div>
             <div><dt>STATUS</dt><dd><mark>{normalizeStatus(current?.status)}</mark></dd></div>
+            <div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div>
           </dl>
           <p>No quote before review.<br />No print without approval.</p>
         </div>
+        {formError ? <p className="formError" role="alert">{formError}</p> : null}
+        {current?.artworkSource === "upload" && current.artworkUploadStatus === "failed" ? <button className="outlineCta" disabled={retryingArtwork} onClick={retryArtworkUpload} type="button">{retryingArtwork ? "UPLOADING ARTWORK" : "RETRY ARTWORK UPLOAD"}</button> : null}
         <a className="blackButton" href={messengerLink} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a>
         <TrackerCard />
         <button className="outlineCta" onClick={() => setScreen("myInquiries")} type="button">VIEW ALL INQUIRIES</button>
@@ -544,9 +687,9 @@ export default function HomePage() {
           <label><span>CONTACT</span><input placeholder="Phone number or Messenger used in order" value={trackContact} onChange={(event) => setTrackContact(event.target.value)} /></label>
           <button className="limeCta" type="submit">TRACK INQUIRY</button>
         </form>
-        {trackSearched ? matchedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{matchedInquiry.ref}</dd></div><div><dt>PRODUCT</dt><dd>{matchedInquiry.productName}</dd></div><div><dt>STATUS</dt><dd><mark>{normalizeStatus(matchedInquiry.status)}</mark></dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
+        {trackSearched ? matchedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{matchedInquiry.ref}</dd></div><div><dt>PRODUCT</dt><dd>{matchedInquiry.productName}</dd></div><div><dt>STATUS</dt><dd><mark>{normalizeStatus(matchedInquiry.status)}</mark></dd></div><div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(matchedInquiry)}</dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryList">
-          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><mark>{normalizeStatus(item.status)}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
+          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><mark>{normalizeStatus(item.status)}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
         </div>
         <BottomNav active="myInquiries" />
       </section>
