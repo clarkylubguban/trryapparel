@@ -25,6 +25,7 @@ dist-ssr
 
 .vercel
 .env*
+!.env.example
 
 # Next.js generated files
 .next/

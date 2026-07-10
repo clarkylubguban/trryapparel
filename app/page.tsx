@@ -261,7 +261,7 @@ export default function HomePage() {
     setUploadMessage("Artwork saved locally for inquiry preview.");
   }
 
-  function submitInquiry(event: FormEvent<HTMLFormElement>) {
+  async function submitInquiry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) {
       if (!totalPieces) setFormError("Add at least one size quantity before submitting.");
@@ -274,46 +274,83 @@ export default function HomePage() {
     }
 
     setIsSubmitting(true);
-    window.localStorage.setItem("customerName", customerName.trim());
-    window.localStorage.setItem("customerContact", customerContact.trim());
-
-    const savedInquiries = getStoredInquiries();
-    const artworkSource: ArtworkSource = artworkName ? "upload" : canvaLink.trim() ? "canva" : "send-later";
-
-    const nextInquiry: Inquiry = {
-      ref: makeRef(savedInquiries),
-      createdAt: new Date().toISOString(),
-      productId: activeProduct.id,
-      productName: activeProduct.name,
-      basePrice: activeProduct.basePrice,
-      method,
-      methodMoq: requiredMoq,
-      color,
-      sizeRun,
-      totalPieces,
-      canvaLink: canvaLink.trim(),
-      artworkName: artworkLater && !artworkName ? "Send artwork later" : artworkName,
-      artworkSource,
-      previousReference: previousReference.trim(),
-      neededDate,
-      notes: notes.trim(),
-      customerName: customerName.trim(),
-      customerContact: customerContact.trim(),
-      rightsConfirmed,
-      status: "FOR REVIEW",
-    };
-
-    const nextList = [nextInquiry, ...savedInquiries].slice(0, 20);
-    saveStoredInquiries(nextList);
-    setInquiries(nextList);
-    setSubmittedInquiry(nextInquiry);
-    setTrackRef(nextInquiry.ref);
-    setTrackContact(nextInquiry.customerContact);
     setFormError("");
-    setIsSubmitting(false);
-    setScreen("submitted");
-  }
 
+    const artworkSource: ArtworkSource = artworkName ? "upload" : canvaLink.trim() ? "canva" : "send-later";
+    const customerSubmittedAt = new Date().toISOString();
+
+    try {
+      const response = await fetch("/api/inquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: activeProduct.id,
+          productName: activeProduct.name,
+          basePrice: activeProduct.basePrice,
+          method,
+          methodMoq: requiredMoq,
+          color,
+          sizeRun,
+          totalPieces,
+          canvaLink: canvaLink.trim(),
+          artworkName,
+          artworkSource,
+          previousReference: previousReference.trim(),
+          neededDate,
+          notes: notes.trim(),
+          customerName: customerName.trim(),
+          customerContact: customerContact.trim(),
+          rightsConfirmed,
+          customerSubmittedAt,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({})) as { reference?: string; status?: string; createdAt?: string; error?: string };
+
+      if (!response.ok || !result.reference) {
+        throw new Error(result.error || "Unable to submit inquiry right now. Please try again.");
+      }
+
+      window.localStorage.setItem("customerName", customerName.trim());
+      window.localStorage.setItem("customerContact", customerContact.trim());
+
+      const savedInquiries = getStoredInquiries();
+      const nextInquiry: Inquiry = {
+        ref: result.reference,
+        createdAt: result.createdAt || customerSubmittedAt,
+        productId: activeProduct.id,
+        productName: activeProduct.name,
+        basePrice: activeProduct.basePrice,
+        method,
+        methodMoq: requiredMoq,
+        color,
+        sizeRun,
+        totalPieces,
+        canvaLink: canvaLink.trim(),
+        artworkName: artworkLater && !artworkName ? "Send artwork later" : artworkName,
+        artworkSource,
+        previousReference: previousReference.trim(),
+        neededDate,
+        notes: notes.trim(),
+        customerName: customerName.trim(),
+        customerContact: customerContact.trim(),
+        rightsConfirmed,
+        status: normalizeStatus(result.status),
+      };
+
+      const nextList = [nextInquiry, ...savedInquiries].slice(0, 20);
+      saveStoredInquiries(nextList);
+      setInquiries(nextList);
+      setSubmittedInquiry(nextInquiry);
+      setTrackRef(nextInquiry.ref);
+      setTrackContact(nextInquiry.customerContact);
+      setScreen("submitted");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Unable to submit inquiry right now. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
   function BottomNav({ active }: { active: "home" | "catalog" | "myInquiries" }) {
     return (
       <nav className="bottomNav" aria-label="TRRY navigation">
