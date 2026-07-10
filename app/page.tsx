@@ -6,6 +6,8 @@ type Screen = "home" | "catalog" | "customize" | "submitted" | "myInquiries";
 type Method = "DTF Transfer" | "Embroidery" | "Screen Print";
 type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "2XL";
 type UploadStatus = "idle" | "ready" | "error";
+type ArtworkSource = "upload" | "canva" | "send-later";
+type InquiryStatus = "FOR REVIEW" | "IN PRODUCTION" | "DELIVERED";
 
 type SizeRun = Record<SizeKey, number>;
 
@@ -31,18 +33,20 @@ type Inquiry = {
   productName: string;
   basePrice: number;
   method: Method;
+  methodMoq: number;
   color: string;
   sizeRun: SizeRun;
   totalPieces: number;
   canvaLink: string;
   artworkName: string;
+  artworkSource: ArtworkSource;
   previousReference: string;
   neededDate: string;
   notes: string;
   customerName: string;
   customerContact: string;
   rightsConfirmed: boolean;
-  status: "FOR_REVIEW" | "IN_PRODUCTION" | "DELIVERED";
+  status: InquiryStatus;
 };
 
 const PRODUCTS: Product[] = [
@@ -86,23 +90,79 @@ function formatMoney(value: number) {
   return `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function makeRef() {
-  return `TRRY-${Math.floor(1000 + Math.random() * 9000)}`;
+function makeRef(existing: Inquiry[] = []) {
+  const usedRefs = new Set(existing.map((item) => item.ref.toLowerCase()));
+  let candidate = "";
+  do {
+    candidate = `TRRY-${Math.floor(1000 + Math.random() * 9000)}`;
+  } while (usedRefs.has(candidate.toLowerCase()));
+  return candidate;
 }
 
-function todayLabel() {
-  return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(new Date());
+function formatCustomerDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(date);
 }
 
 function cleanPhone(value: string) {
   return value.trim().toLowerCase();
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeStatus(value: unknown): InquiryStatus {
+  const status = String(value || "").trim().replace(/_/g, " ").toUpperCase();
+  if (status === "IN PRODUCTION") return "IN PRODUCTION";
+  if (status === "DELIVERED") return "DELIVERED";
+  return "FOR REVIEW";
+}
+
+function getArtworkSource(item: Record<string, unknown>): ArtworkSource {
+  if (item.artworkSource === "upload" || item.artworkSource === "canva" || item.artworkSource === "send-later") return item.artworkSource;
+  if (typeof item.canvaLink === "string" && item.canvaLink.trim()) return "canva";
+  if (typeof item.artworkName === "string" && item.artworkName.trim()) return item.artworkName === "Send artwork later" ? "send-later" : "upload";
+  return "send-later";
 }
 
 function getStoredInquiries(): Inquiry[] {
   if (typeof window === "undefined") return [];
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter(isRecord).flatMap((item) => {
+      const ref = typeof item.ref === "string" ? item.ref : typeof item.reference === "string" ? item.reference : "";
+      const productName = typeof item.productName === "string" ? item.productName : "";
+      const totalPieces = typeof item.totalPieces === "number" ? item.totalPieces : typeof item.totalQuantity === "number" ? item.totalQuantity : NaN;
+      if (!ref || !productName || !Number.isFinite(totalPieces) || typeof item.status !== "string") return [];
+
+      const method: Method = item.method === "Embroidery" || item.method === "Screen Print" || item.method === "DTF Transfer" ? item.method : "DTF Transfer";
+
+      return [{
+        ref,
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
+        productId: typeof item.productId === "string" ? item.productId : "legacy-product",
+        productName,
+        basePrice: typeof item.basePrice === "number" ? item.basePrice : 0,
+        method,
+        methodMoq: typeof item.methodMoq === "number" ? item.methodMoq : METHOD_MOQ[method],
+        color: typeof item.color === "string" ? item.color : "",
+        sizeRun: isRecord(item.sizeRun) ? item.sizeRun as SizeRun : { ...EMPTY_SIZE_RUN },
+        totalPieces,
+        canvaLink: typeof item.canvaLink === "string" ? item.canvaLink : "",
+        artworkName: typeof item.artworkName === "string" ? item.artworkName : "",
+        artworkSource: getArtworkSource(item),
+        previousReference: typeof item.previousReference === "string" ? item.previousReference : "",
+        neededDate: typeof item.neededDate === "string" ? item.neededDate : "",
+        notes: typeof item.notes === "string" ? item.notes : "",
+        customerName: typeof item.customerName === "string" ? item.customerName : "",
+        customerContact: typeof item.customerContact === "string" ? item.customerContact : "",
+        rightsConfirmed: item.rightsConfirmed === true,
+        status: normalizeStatus(item.status),
+      }];
+    });
   } catch {
     return [];
   }
@@ -154,6 +214,7 @@ export default function HomePage() {
   const hasArtworkPlan = Boolean(artworkName || canvaLink.trim() || artworkLater);
   const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
   const matchedInquiry = inquiries.find((item) => item.ref.toLowerCase() === trackRef.trim().toLowerCase() && cleanPhone(item.customerContact) === cleanPhone(trackContact));
+  const messengerLink = `${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I want to ask about inquiry ${submittedInquiry?.ref || trackRef || ""}.`)}`;
 
   function resetFormForProduct(product: Product) {
     setActiveProduct(product);
@@ -216,28 +277,33 @@ export default function HomePage() {
     window.localStorage.setItem("customerName", customerName.trim());
     window.localStorage.setItem("customerContact", customerContact.trim());
 
+    const savedInquiries = getStoredInquiries();
+    const artworkSource: ArtworkSource = artworkName ? "upload" : canvaLink.trim() ? "canva" : "send-later";
+
     const nextInquiry: Inquiry = {
-      ref: makeRef(),
-      createdAt: todayLabel(),
+      ref: makeRef(savedInquiries),
+      createdAt: new Date().toISOString(),
       productId: activeProduct.id,
       productName: activeProduct.name,
       basePrice: activeProduct.basePrice,
       method,
+      methodMoq: requiredMoq,
       color,
       sizeRun,
       totalPieces,
       canvaLink: canvaLink.trim(),
       artworkName: artworkLater && !artworkName ? "Send artwork later" : artworkName,
+      artworkSource,
       previousReference: previousReference.trim(),
       neededDate,
       notes: notes.trim(),
       customerName: customerName.trim(),
       customerContact: customerContact.trim(),
       rightsConfirmed,
-      status: "FOR_REVIEW",
+      status: "FOR REVIEW",
     };
 
-    const nextList = [nextInquiry, ...getStoredInquiries()].slice(0, 20);
+    const nextList = [nextInquiry, ...savedInquiries].slice(0, 20);
     saveStoredInquiries(nextList);
     setInquiries(nextList);
     setSubmittedInquiry(nextInquiry);
@@ -413,11 +479,11 @@ export default function HomePage() {
             <div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div>
             <div><dt>TOTAL PIECES</dt><dd>{current?.totalPieces}</dd></div>
             <div><dt>METHOD</dt><dd>{current?.method}</dd></div>
-            <div><dt>STATUS</dt><dd><mark>For Review</mark></dd></div>
+            <div><dt>STATUS</dt><dd><mark>{normalizeStatus(current?.status)}</mark></dd></div>
           </dl>
           <p>No quote before review.<br />No print without approval.</p>
         </div>
-        <a className="blackButton" href={MESSENGER_LINK} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a>
+        <a className="blackButton" href={messengerLink} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a>
         <TrackerCard />
         <button className="outlineCta" onClick={() => setScreen("myInquiries")} type="button">VIEW ALL INQUIRIES</button>
         <BottomNav active="myInquiries" />
@@ -441,9 +507,9 @@ export default function HomePage() {
           <label><span>CONTACT</span><input placeholder="Phone number or Messenger used in order" value={trackContact} onChange={(event) => setTrackContact(event.target.value)} /></label>
           <button className="limeCta" type="submit">TRACK INQUIRY</button>
         </form>
-        {trackSearched ? matchedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{matchedInquiry.ref}</dd></div><div><dt>PRODUCT</dt><dd>{matchedInquiry.productName}</dd></div><div><dt>STATUS</dt><dd><mark>For Review</mark></dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p><a className="blackButton" href={MESSENGER_LINK} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a></div> : null}
+        {trackSearched ? matchedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{matchedInquiry.ref}</dd></div><div><dt>PRODUCT</dt><dd>{matchedInquiry.productName}</dd></div><div><dt>STATUS</dt><dd><mark>{normalizeStatus(matchedInquiry.status)}</mark></dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryList">
-          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {item.createdAt}</small><mark>{item.status === "FOR_REVIEW" ? "FOR REVIEW" : item.status.replace("_", " ")}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
+          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><mark>{normalizeStatus(item.status)}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
         </div>
         <BottomNav active="myInquiries" />
       </section>
