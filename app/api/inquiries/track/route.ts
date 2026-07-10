@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid tracking request." }, { status: 400 });
   }
 
-  const inquiryNumber = text(body.inquiryNumber).toUpperCase();
+  const inquiryNumber = text(body.inquiryNumber || body.id).toUpperCase();
   const contact = text(body.contact);
 
   if (!inquiryNumber || !contact) {

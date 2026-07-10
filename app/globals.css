@@ -347,6 +347,7 @@ mark { background: transparent; border: var(--line-thin); padding: 2px 6px; }
 .emptyState { border: var(--line); padding: 14px; }
 .trackForm { display: grid; gap: 14px; }
 .trackForm label { display: grid; gap: 7px; }
+.syncStatus { border: var(--line-thin); padding: 8px; font-family: var(--mono); font-size: 0.68rem; font-weight: 950; }
 .notFound { display: grid; gap: 12px; }
 
 @media (min-width: 700px) {

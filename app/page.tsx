@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 type Screen = "home" | "catalog" | "customize" | "submitted" | "myInquiries";
 type Method = "DTF Transfer" | "Embroidery" | "Screen Print";
@@ -122,6 +122,11 @@ function formatCustomerDate(value: string) {
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(date);
 }
+function parseTotalPiecesFromQuantity(value: string) {
+  const match = value.match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
 
 function cleanPhone(value: string) {
   return value.trim().toLowerCase();
@@ -248,12 +253,23 @@ export default function HomePage() {
   const [trackSearched, setTrackSearched] = useState(false);
   const [trackedInquiry, setTrackedInquiry] = useState<TrackedInquiry | null>(null);
   const [isTracking, setIsTracking] = useState(false);
+  const [isSyncingInquiries, setIsSyncingInquiries] = useState(false);
+  const previousScreenRef = useRef<Screen>("home");
+  const syncInquiriesInProgressRef = useRef(false);
 
   useEffect(() => {
     setInquiries(getStoredInquiries());
     setCustomerName(window.localStorage.getItem("customerName") || "");
     setCustomerContact(window.localStorage.getItem("customerContact") || "");
   }, []);
+  useEffect(() => {
+    const previousScreen = previousScreenRef.current;
+    previousScreenRef.current = screen;
+
+    if (screen === "myInquiries" && previousScreen !== "myInquiries") {
+      void syncSavedInquiryStatuses();
+    }
+  }, [screen]);
 
   const isQuantityOnlyProduct = activeProduct.sizing === "quantity-only";
   const totalPieces = useMemo(() => isQuantityOnlyProduct ? quantityOnly : activeProduct.availableSizes.reduce((sum, size) => sum + sizeRun[size], 0), [activeProduct.availableSizes, isQuantityOnlyProduct, quantityOnly, sizeRun]);
@@ -305,6 +321,77 @@ export default function HomePage() {
 
   function updateQuantityOnly(delta: number) {
     setQuantityOnly((current) => Math.max(0, current + delta));
+  }
+  function mergeServerInquiry(oldItem: Inquiry, freshInquiry: TrackedInquiry): Inquiry {
+    return {
+      ...oldItem,
+      ...freshInquiry,
+      ref: freshInquiry.id,
+      createdAt: freshInquiry.submittedAt,
+      productName: freshInquiry.product,
+      totalPieces: parseTotalPiecesFromQuantity(freshInquiry.quantity) || oldItem.totalPieces,
+      status: normalizeStatus(freshInquiry.statusLabel),
+      statusKey: freshInquiry.statusKey,
+      statusLabel: freshInquiry.statusLabel || "STATUS ERROR",
+    };
+  }
+
+  async function fetchTrackedInquiry(id: string, contact: string) {
+    const response = await fetch("/api/inquiries/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, contact }),
+    });
+
+    const data = await response.json().catch(() => ({})) as {
+      ok?: boolean;
+      inquiry?: TrackedInquiry;
+      error?: string;
+    };
+
+    if (!response.ok || !data.ok || !data.inquiry) {
+      throw new Error("Inquiry status unavailable.");
+    }
+
+    return {
+      ...data.inquiry,
+      statusLabel: data.inquiry.statusLabel || "STATUS ERROR",
+    };
+  }
+
+  async function syncSavedInquiryStatuses() {
+    if (syncInquiriesInProgressRef.current) return;
+
+    const saved = getStoredInquiries();
+    const syncable = saved.filter((item) => item.ref.trim() && item.customerContact.trim());
+
+    setInquiries(saved);
+    if (!syncable.length) return;
+
+    syncInquiriesInProgressRef.current = true;
+    setIsSyncingInquiries(true);
+
+    try {
+      const results = await Promise.allSettled(syncable.map((item) => fetchTrackedInquiry(item.ref, item.customerContact)));
+      const freshById = new Map<string, TrackedInquiry>();
+
+      results.forEach((result) => {
+        if (result.status === "fulfilled") {
+          freshById.set(result.value.id.toLowerCase(), result.value);
+        }
+      });
+
+      const refreshed = saved.map((item) => {
+        const freshInquiry = freshById.get(item.ref.toLowerCase());
+        return freshInquiry ? mergeServerInquiry(item, freshInquiry) : item;
+      });
+
+      saveStoredInquiries(refreshed);
+      setInquiries(refreshed);
+    } finally {
+      syncInquiriesInProgressRef.current = false;
+      setIsSyncingInquiries(false);
+    }
   }
 
   function handleUpload(file: File | undefined) {
@@ -534,43 +621,13 @@ export default function HomePage() {
     setIsTracking(true);
 
     try {
-      const response = await fetch("/api/inquiries/track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inquiryNumber, contact }),
-      });
-
-      const data = await response.json().catch(() => ({})) as {
-        ok?: boolean;
-        inquiry?: TrackedInquiry;
-        error?: string;
-      };
-
-      if (!response.ok || !data.ok || !data.inquiry) {
-        setTrackSearched(true);
-        return;
-      }
-
-      const freshInquiry: TrackedInquiry = {
-        ...data.inquiry,
-        statusLabel: data.inquiry.statusLabel || "STATUS ERROR",
-      };
-
+      const freshInquiry = await fetchTrackedInquiry(inquiryNumber, contact);
       const saved = getStoredInquiries();
       const existing = saved.find((item) => item.ref.toLowerCase() === freshInquiry.id.toLowerCase());
 
       if (existing) {
-        const refreshedLocalInquiry: Inquiry = {
-          ...existing,
-          ref: freshInquiry.id,
-          createdAt: freshInquiry.submittedAt,
-          productName: freshInquiry.product,
-          totalPieces: Number.parseInt(freshInquiry.quantity, 10) || existing.totalPieces,
-          status: normalizeStatus(freshInquiry.statusLabel),
-          statusKey: freshInquiry.statusKey,
-          statusLabel: freshInquiry.statusLabel,
-        };
-        const nextList = [refreshedLocalInquiry, ...saved.filter((item) => item.ref.toLowerCase() !== refreshedLocalInquiry.ref.toLowerCase())].slice(0, 20);
+        const refreshedLocalInquiry = mergeServerInquiry(existing, freshInquiry);
+        const nextList = saved.map((item) => item.ref.toLowerCase() === refreshedLocalInquiry.ref.toLowerCase() ? refreshedLocalInquiry : item).slice(0, 20);
         saveStoredInquiries(nextList);
         setInquiries(nextList);
       }
@@ -780,6 +837,7 @@ export default function HomePage() {
           <label><span>CONTACT</span><input placeholder="Phone number or Messenger used in order" value={trackContact} onChange={(event) => setTrackContact(event.target.value)} /></label>
           <button className="limeCta" disabled={isTracking} type="submit">{isTracking ? "TRACKING" : "TRACK INQUIRY"}</button>
         </form>
+        {isSyncingInquiries ? <p className="syncStatus">UPDATING INQUIRIES...</p> : null}
         {trackSearched ? trackedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{trackedInquiry.quantity}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryList">
           {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><mark>{item.statusLabel || "STATUS ERROR"}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
