@@ -54,10 +54,10 @@ const PRODUCTS: Product[] = [
   { id: "towels", name: "Towels", description: "Premium giveaway or team towels.", basePrice: 200, icon: "TW", tags: ["Embroidery"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
 ];
 
-const METHOD_MOQ: Record<Method, { minimum: number; note: string }> = {
-  "DTF Transfer": { minimum: 1, note: "Minimum order: 1 piece for DTF transfer." },
-  Embroidery: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." },
-  "Screen Print": { minimum: 1, note: "Minimum order: 1 piece for screen print." },
+const METHOD_MOQ: Record<Method, number> = {
+  "DTF Transfer": 1,
+  Embroidery: 1,
+  "Screen Print": 30,
 };
 
 const COLORS = [
@@ -83,7 +83,7 @@ const STORAGE_KEY = "trry_inquiries_v3";
 const MESSENGER_LINK = "https://m.me/trryapparel";
 
 function formatMoney(value: number) {
-  return `₱${value.toFixed(2)}`;
+  return `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function makeRef() {
@@ -145,9 +145,11 @@ export default function HomePage() {
 
   const totalPieces = useMemo(() => activeProduct.availableSizes.reduce((sum, size) => sum + sizeRun[size], 0), [activeProduct.availableSizes, sizeRun]);
   const canvaValid = !canvaLink.trim() || /^https?:\/\/(www\.)?canva\.com\/.+/i.test(canvaLink.trim());
-  const methodMoq = METHOD_MOQ[method];
-  const requiredMoq = Math.max(activeProduct.moq.minimum, methodMoq.minimum);
-  const moqNote = activeProduct.moq.minimum > methodMoq.minimum ? activeProduct.moq.note : methodMoq.note;
+  const requiredMoq = METHOD_MOQ[method];
+  const remainingPieces = requiredMoq > totalPieces ? requiredMoq - totalPieces : 0;
+  const moqNote = remainingPieces > 0
+    ? `${method} requires at least ${requiredMoq} ${requiredMoq === 1 ? "piece" : "pieces"}. Add ${remainingPieces} more.`
+    : `${method} minimum met.`;
   const moqMet = totalPieces >= requiredMoq;
   const hasArtworkPlan = Boolean(artworkName || canvaLink.trim() || artworkLater);
   const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
