@@ -1,581 +1,453 @@
-"use client";
+﻿"use client";
 
-import { useCallback, useMemo, useState, type FormEvent } from "react";
-import ActionCard from "../components/ActionCard";
-import BottomNav, { type NavKey } from "../components/BottomNav";
-import ConfirmationCard from "../components/ConfirmationCard";
-import Hero from "../components/Hero";
-import OrderTrackerCard from "../components/OrderTrackerCard";
-import ProductCard from "../components/ProductCard";
-import RequestForm, { type FieldConfig, type RequestFormValues } from "../components/RequestForm";
-import TrackRequest from "../components/TrackRequest";
-import {
-  REQUEST_STORAGE_KEY,
-  buildSummary,
-  createRequestId,
-  type RequestKind,
-  type StoredRequest,
-} from "../lib/requests";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-type Screen = NavKey | "canva" | "confirmation";
+type Screen = "home" | "catalog" | "customize" | "submitted" | "myInquiries" | "trackInquiry";
+type Method = "DTF Transfer" | "Embroidery" | "Screen Print";
+type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "2XL";
+type UploadStatus = "idle" | "ready" | "error";
 
-type OnboardingStep = "welcome" | "customer" | "path" | "info" | "done";
-
-type CustomerType = "Personal / Barkada" | "Business / Team" | "Reorder";
-
-type CustomerProfile = {
-  name: string;
-  contact: string;
-  customerType: CustomerType;
-  orderPath: Screen;
-};
-
-type HomeAction = {
-  title: string;
-  helper: string;
-  tone: "pink" | "yellow" | "teal" | "purple" | "cream";
-  screen: Screen;
-};
+type SizeRun = Record<SizeKey, number>;
 
 type Product = {
+  id: string;
   name: string;
   description: string;
-  price: string;
-  tone: "pink" | "yellow" | "teal" | "purple";
-  actionLabel: string;
-  target: Screen;
+  basePrice: number;
+  icon: string;
+  tags: Method[];
+  availableSizes: SizeKey[];
+  moq: {
+    minimum: number;
+    note: string;
+  };
+  referenceRequired?: boolean;
 };
 
-const customerTypes: CustomerType[] = ["Personal / Barkada", "Business / Team", "Reorder"];
+type Inquiry = {
+  ref: string;
+  createdAt: string;
+  productId: string;
+  productName: string;
+  basePrice: number;
+  method: Method;
+  color: string;
+  sizeRun: SizeRun;
+  totalPieces: number;
+  canvaLink: string;
+  artworkName: string;
+  previousReference: string;
+  neededDate: string;
+  notes: string;
+  customerName: string;
+  customerContact: string;
+  rightsConfirmed: boolean;
+  status: "FOR_REVIEW" | "IN_PRODUCTION" | "DELIVERED";
+};
 
-const actions: HomeAction[] = [
-  {
-    title: "Shop Tees",
-    helper: "Ready drops + slogans",
-    tone: "pink",
-    screen: "shop",
-  },
-  {
-    title: "Pa-custom Shirt",
-    helper: "Pili color + send peg",
-    tone: "yellow",
-    screen: "customize",
-  },
-  {
-    title: "Send Canva",
-    helper: "Send file, kami prep",
-    tone: "teal",
-    screen: "canva",
-  },
-  {
-    title: "Uniform Quote",
-    helper: "For barkada + business",
-    tone: "purple",
-    screen: "uniforms",
-  },
-  {
-    title: "Track Request",
-    helper: "Check status, no stress",
-    tone: "cream",
-    screen: "track",
-  },
+const PRODUCTS: Product[] = [
+  { id: "premium-cotton-shirt", name: "Premium Cotton Shirt", description: "Soft daily shirt for prints and slogans.", basePrice: 280, icon: "TS", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "caps", name: "Caps", description: "Logo caps for crews and teams.", basePrice: 180, icon: "CP", tags: ["Embroidery"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
+  { id: "boxy-crop-shirt", name: "Boxy Crop Shirt", description: "Boxy fit merch shirt.", basePrice: 300, icon: "BX", tags: ["DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "polo-uniform", name: "Polo Uniform", description: "Business polo with logo placement.", basePrice: 350, icon: "PL", tags: ["Embroidery", "DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
+  { id: "tote-bag", name: "Tote Bag", description: "Reusable merch and event bag.", basePrice: 220, icon: "TB", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "towels", name: "Towels", description: "Premium giveaway or team towels.", basePrice: 200, icon: "TW", tags: ["Embroidery"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
 ];
 
-const products: Product[] = [
-  {
-    name: "Statement Tee",
-    description: "Ready slogan shirts for everyday drops and quick gifts.",
-    price: "Starts at quote",
-    tone: "pink",
-    actionLabel: "Pa-custom",
-    target: "customize",
-  },
-  {
-    name: "Basic Top",
-    description: "Simple blank-style tops for clean prints and logo work.",
-    price: "Ask for quote",
-    tone: "yellow",
-    actionLabel: "Pili Color",
-    target: "customize",
-  },
-  {
-    name: "Custom Shirt",
-    description: "Send your idea, slogan, Canva file, or print notes.",
-    price: "Ask for quote",
-    tone: "teal",
-    actionLabel: "Send Design",
-    target: "canva",
-  },
-  {
-    name: "Uniform Starter",
-    description: "Company, team, school, and group order inquiries.",
-    price: "Quote Na",
-    tone: "purple",
-    actionLabel: "Quote Na",
-    target: "uniforms",
-  },
+const COLORS = [
+  { name: "Black", value: "#111111" },
+  { name: "White", value: "#fffdf8" },
+  { name: "Sand", value: "#dfd0b5" },
+  { name: "Olive", value: "#596042" },
+  { name: "Maroon", value: "#64171d" },
+  { name: "Navy", value: "#0c1d39" },
 ];
 
-const customizeFields: FieldConfig[] = [
-  { name: "customerName", label: "Customer name", required: true, placeholder: "Your full name", section: "Contact Info" },
-  { name: "contact", label: "Contact number or Messenger name", required: true, placeholder: "Phone or Messenger", section: "Contact Info" },
-  { name: "shirtColor", label: "Shirt color", required: true, placeholder: "Black, white, pink...", section: "Shirt Details" },
-  { name: "size", label: "Size", required: true, selectPlaceholder: "Select size", options: ["XS", "S", "M", "L", "XL", "2XL", "3XL"], section: "Shirt Details" },
-  { name: "quantity", label: "Quantity", type: "number", required: true, placeholder: "Quantity", section: "Shirt Details" },
-  { name: "customizationType", label: "Customization type", required: true, selectPlaceholder: "Select print type", options: ["Print", "Embroidery", "Print + Embroidery"], section: "Design Details" },
-  { name: "designNotes", label: "Design notes", textarea: true, placeholder: "Tell us the slogan, logo placement, or design idea.", section: "Design Details" },
-  { name: "deadline", label: "Deadline or needed date", type: "date", required: true, placeholder: "Pick your needed date", section: "Schedule" },
-];
+const SIZES: SizeKey[] = ["XS", "S", "M", "L", "XL", "2XL"];
+const EMPTY_SIZE_RUN: SizeRun = { XS: 0, S: 0, M: 0, L: 0, XL: 0, "2XL": 0 };
+const STORAGE_KEY = "trry_inquiries_v3";
+const MESSENGER_LINK = "https://m.me/trryapparel";
 
-const canvaFields: FieldConfig[] = [
-  { name: "customerName", label: "Customer name", required: true, placeholder: "Your full name" },
-  { name: "contact", label: "Contact number or Messenger name", required: true, placeholder: "Phone or Messenger" },
-  { name: "canvaLink", label: "Canva link", type: "url", required: true, placeholder: "https://www.canva.com/..." },
-  { name: "productType", label: "Product type", required: true, options: ["Shirt", "Uniform", "Tote", "Cap", "Other"] },
-  { name: "notes", label: "Notes", textarea: true, placeholder: "Any sizing, print, or file prep notes?" },
-  { name: "deadline", label: "Deadline or needed date", type: "date", required: true },
-];
-
-const uniformFields: FieldConfig[] = [
-  { name: "businessName", label: "Business or team name", required: true, placeholder: "Company, team, or group" },
-  { name: "contactPerson", label: "Contact person", required: true, placeholder: "Who should TRRY message?" },
-  { name: "contact", label: "Contact number", required: true, placeholder: "Phone or Messenger" },
-  { name: "quantity", label: "Estimated quantity", type: "number", required: true, placeholder: "20" },
-  { name: "serviceNeeded", label: "Service needed", required: true, options: ["DTF", "Embroidery", "Screen Print", "Full Uniform Package"] },
-  { name: "deadline", label: "Deadline or needed date", type: "date", required: true },
-  { name: "notes", label: "Notes", textarea: true, placeholder: "Logo placement, shirt style, fabric, or delivery notes." },
-];
-
-function getActiveNav(screen: Screen, confirmation?: StoredRequest | null): NavKey {
-  if (screen === "canva") {
-    return "customize";
-  }
-
-  if (screen === "confirmation") {
-    if (confirmation?.type === "Uniform Inquiry") {
-      return "uniforms";
-    }
-
-    return "customize";
-  }
-
-  return screen;
+function formatMoney(value: number) {
+  return `₱${value.toFixed(2)}`;
 }
 
-function getRequestTarget(request?: StoredRequest | null): Screen {
-  if (request?.type === "Uniform Inquiry") {
-    return "uniforms";
-  }
+function makeRef() {
+  return `TRRY-${Math.floor(1000 + Math.random() * 9000)}`;
+}
 
-  if (request?.type === "Canva Link") {
-    return "canva";
-  }
+function todayLabel() {
+  return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(new Date());
+}
 
-  return "customize";
+function cleanPhone(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getStoredInquiries(): Inquiry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredInquiries(items: Inquiry[]) {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
 export default function HomePage() {
   const [screen, setScreen] = useState<Screen>("home");
-  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>("welcome");
-  const [customerType, setCustomerType] = useState<CustomerType | "">("");
-  const [selectedPath, setSelectedPath] = useState<Screen>("customize");
-  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
-  const [confirmation, setConfirmation] = useState<StoredRequest | null>(null);
-  const [trackQuery, setTrackQuery] = useState("");
-  const [cartNotice, setCartNotice] = useState(false);
+  const [activeProduct, setActiveProduct] = useState<Product>(PRODUCTS[0]);
+  const [color, setColor] = useState("Sand");
+  const [method, setMethod] = useState<Method>(PRODUCTS[0].tags[0]);
+  const [sizeRun, setSizeRun] = useState<SizeRun>(EMPTY_SIZE_RUN);
+  const [canvaLink, setCanvaLink] = useState("");
+  const [artworkName, setArtworkName] = useState("");
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [previousReference, setPreviousReference] = useState("");
+  const [neededDate, setNeededDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerContact, setCustomerContact] = useState("");
+  const [rightsConfirmed, setRightsConfirmed] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedInquiry, setSubmittedInquiry] = useState<Inquiry | null>(null);
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [trackRef, setTrackRef] = useState("");
+  const [trackContact, setTrackContact] = useState("");
+  const [trackSearched, setTrackSearched] = useState(false);
 
-  const loadRequests = useCallback((): StoredRequest[] => {
-    if (typeof window === "undefined") {
-      return [];
-    }
-
-    try {
-      const savedRequests = window.localStorage.getItem(REQUEST_STORAGE_KEY);
-      return savedRequests ? (JSON.parse(savedRequests) as StoredRequest[]) : [];
-    } catch {
-      return [];
-    }
+  useEffect(() => {
+    setInquiries(getStoredInquiries());
+    setCustomerName(window.localStorage.getItem("customerName") || "");
+    setCustomerContact(window.localStorage.getItem("customerContact") || "");
   }, []);
 
-  const activeNav = useMemo(() => getActiveNav(screen, confirmation), [screen, confirmation]);
+  const totalPieces = useMemo(() => SIZES.reduce((sum, size) => sum + sizeRun[size], 0), [sizeRun]);
+  const canvaValid = !canvaLink.trim() || /^https?:\/\/(www\.)?canva\.com\/.+/i.test(canvaLink.trim());
+  const moqMet = totalPieces >= activeProduct.moq.minimum;
+  const canSubmit = totalPieces > 0 && moqMet && canvaValid && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
+  const matchedInquiry = inquiries.find((item) => item.ref.toLowerCase() === trackRef.trim().toLowerCase() && cleanPhone(item.customerContact) === cleanPhone(trackContact));
 
-  function navigate(nextScreen: Screen) {
-    if (nextScreen !== "track") {
-      setTrackQuery("");
+  function resetFormForProduct(product: Product) {
+    setActiveProduct(product);
+    setColor("Sand");
+    setMethod(product.tags[0]);
+    setSizeRun({ ...EMPTY_SIZE_RUN });
+    setCanvaLink("");
+    setArtworkName("");
+    setUploadStatus("idle");
+    setUploadMessage("");
+    setPreviousReference("");
+    setNeededDate("");
+    setNotes("");
+    setRightsConfirmed(false);
+    setFormError("");
+    setIsSubmitting(false);
+  }
+
+  function openCatalog() {
+    setScreen("catalog");
+  }
+
+  function openProduct(product: Product) {
+    resetFormForProduct(product);
+    setScreen("customize");
+  }
+
+  function updateSize(size: SizeKey, delta: number) {
+    setSizeRun((current) => ({ ...current, [size]: Math.max(0, current[size] + delta) }));
+  }
+
+  function handleUpload(file: File | undefined) {
+    if (!file) return;
+    const allowed = ["image/png", "image/jpeg", "application/pdf", "image/svg+xml"];
+    if (!allowed.includes(file.type)) {
+      setArtworkName("");
+      setUploadStatus("error");
+      setUploadMessage("File format not supported. Upload PNG, JPG, PDF, or SVG.");
+      return;
     }
-    setCartNotice(false);
-    setOnboardingStep("done");
-    setScreen(nextScreen);
+    setArtworkName(file.name);
+    setUploadStatus("ready");
+    setUploadMessage("Artwork saved locally for inquiry preview.");
   }
 
-  function showCartNotice() {
-    setCartNotice(true);
-    window.setTimeout(() => setCartNotice(false), 2200);
-  }
-  function chooseCustomerType(type: CustomerType) {
-    setCustomerType(type);
-    if (type === "Business / Team") {
-      setSelectedPath("uniforms");
-    }
-
-    if (type === "Reorder") {
-      setSelectedPath("track");
-    }
-
-    setOnboardingStep("path");
-  }
-
-  function chooseOrderPath(path: Screen) {
-    setSelectedPath(path);
-    setOnboardingStep("info");
-  }
-
-  function submitBasicInfo(event: FormEvent<HTMLFormElement>) {
+  function submitInquiry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const name = String(formData.get("customerName") ?? "").trim();
-    const contact = String(formData.get("contact") ?? "").trim();
-
-    if (!name || !contact || !customerType) {
+    if (!canSubmit) {
+      if (!totalPieces) setFormError("Add at least one size quantity before submitting.");
+      else if (!moqMet) setFormError(activeProduct.moq.note);
+      else if (!canvaValid) setFormError("Canva link must be a valid canva.com link.");
+      else if (!customerName.trim() || !customerContact.trim()) setFormError("Name and contact are required near the end of the form.");
+      else if (!rightsConfirmed) setFormError("Confirm that you own or are allowed to use the artwork.");
       return;
     }
 
-    setCustomerProfile({
-      name,
-      contact,
-      customerType,
-      orderPath: selectedPath,
-    });
-    setOnboardingStep("done");
-    setScreen(selectedPath);
-  }
+    setIsSubmitting(true);
+    window.localStorage.setItem("customerName", customerName.trim());
+    window.localStorage.setItem("customerContact", customerContact.trim());
 
-  function renderOnboarding() {
-    if (onboardingStep === "customer") {
-      return (
-        <section className="onboardingCard" aria-labelledby="customer-type-title">
-          <span className="stepBadge">Step 2 / Customer Type</span>
-          <h1 id="customer-type-title">Who are we making for?</h1>
-          <p>Pick the lane so TRRY can guide you faster.</p>
-          <div className="choiceGrid">
-            {customerTypes.map((type) => (
-              <button className="choiceCard" key={type} onClick={() => chooseCustomerType(type)} type="button">
-                <strong>{type}</strong>
-                <small>{type === "Business / Team" ? "Uniforms, staff shirts, bulk orders" : type === "Reorder" ? "Track or repeat a past request" : "One shirt, gifts, drops, barkada tees"}</small>
-              </button>
-            ))}
-          </div>
-        </section>
-      );
-    }
-
-    if (onboardingStep === "path") {
-      return (
-        <section className="onboardingCard" aria-labelledby="order-path-title">
-          <span className="stepBadge">Step 3 / Order Path</span>
-          <h1 id="order-path-title">Choose your order path.</h1>
-          <p>Product muna, then name/design, upload or Canva, print type, submit, approve proof, reorder.</p>
-          <div className="choiceGrid pathGrid">
-            {actions.map((action) => (
-              <button
-                className={`choiceCard ${action.tone}`}
-                key={action.title}
-                onClick={() => chooseOrderPath(action.screen)}
-                type="button"
-              >
-                <strong>{action.title}</strong>
-                <small>{action.helper}</small>
-              </button>
-            ))}
-          </div>
-        </section>
-      );
-    }
-
-    if (onboardingStep === "info") {
-      return (
-        <section className="onboardingCard" aria-labelledby="basic-info-title">
-          <span className="stepBadge">Step 4 / Basic Info</span>
-          <h1 id="basic-info-title">Last bit. Para ma-contact ka.</h1>
-          <p>This only personalizes the demo app. Your full request still happens in the next section.</p>
-          <form className="basicInfoForm" onSubmit={submitBasicInfo}>
-            <label className="fieldGroup wide">
-              <span>Name *</span>
-              <input name="customerName" placeholder="Your name" required type="text" />
-            </label>
-            <label className="fieldGroup wide">
-              <span>Contact or Messenger *</span>
-              <input name="contact" placeholder="Phone or Messenger" required type="text" />
-            </label>
-            <button className="submitButton" type="submit">Go to My Section</button>
-          </form>
-        </section>
-      );
-    }
-
-    return (
-      <section className="onboardingCard welcomeCard" aria-labelledby="welcome-title">
-        <span className="stepBadge">Step 1 / Welcome</span>
-        <h1 id="welcome-title">Welcome to the TRRY Custom Lab.</h1>
-        <p>Choose product, add name/design, upload or send Canva, pick DTF or embroidery, submit, approve proof, then reorder anytime.</p>
-        <button className="submitButton" onClick={() => setOnboardingStep("customer")} type="button">
-          Start Na
-        </button>
-      </section>
-    );
-  }
-
-  function submitRequest(
-    type: RequestKind,
-    values: RequestFormValues,
-    fields: FieldConfig[],
-  ) {
-    const existingRequests = loadRequests();
-    const details = fields.reduce<Record<string, string>>((nextDetails, field) => {
-      nextDetails[field.label] = values[field.name] ?? "";
-      return nextDetails;
-    }, {});
-
-    const request: StoredRequest = {
-      id: createRequestId(existingRequests),
-      type,
-      customerName: values.customerName || values.businessName || values.contactPerson || "TRRY Customer",
-      contact: values.contact || "Not provided",
-      status: "Pending TRRY Review",
-      submittedAt: new Date().toISOString(),
-      details,
-      summary: buildSummary(details),
+    const nextInquiry: Inquiry = {
+      ref: makeRef(),
+      createdAt: todayLabel(),
+      productId: activeProduct.id,
+      productName: activeProduct.name,
+      basePrice: activeProduct.basePrice,
+      method,
+      color,
+      sizeRun,
+      totalPieces,
+      canvaLink: canvaLink.trim(),
+      artworkName,
+      previousReference: previousReference.trim(),
+      neededDate,
+      notes: notes.trim(),
+      customerName: customerName.trim(),
+      customerContact: customerContact.trim(),
+      rightsConfirmed,
+      status: "FOR_REVIEW",
     };
 
-    window.localStorage.setItem(
-      REQUEST_STORAGE_KEY,
-      JSON.stringify([...existingRequests, request]),
+    const nextList = [nextInquiry, ...getStoredInquiries()].slice(0, 20);
+    saveStoredInquiries(nextList);
+    setInquiries(nextList);
+    setSubmittedInquiry(nextInquiry);
+    setTrackRef(nextInquiry.ref);
+    setTrackContact(nextInquiry.customerContact);
+    setFormError("");
+    setIsSubmitting(false);
+    setScreen("submitted");
+  }
+
+  function BottomNav({ active }: { active: "home" | "catalog" | "myInquiries" }) {
+    return (
+      <nav className="bottomNav" aria-label="TRRY navigation">
+        <button className={active === "home" ? "active" : ""} onClick={() => setScreen("home")} type="button">HOME</button>
+        <button className={active === "catalog" ? "active" : ""} onClick={openCatalog} type="button">CATALOG</button>
+        <button className={active === "myInquiries" ? "active" : ""} onClick={() => setScreen("myInquiries")} type="button">MY INQUIRIES</button>
+      </nav>
     );
-    setConfirmation(request);
-    setTrackQuery(request.id);
-    setScreen("confirmation");
+  }
+
+  function AppHeader({ backTo, rightLabel }: { backTo?: Screen; rightLabel?: string }) {
+    return (
+      <header className="appHeader">
+        {backTo ? <button className="plainLink" onClick={() => setScreen(backTo)} type="button">BACK</button> : <span />}
+        <strong className="trryLogo">TRRY<span>*</span></strong>
+        {rightLabel ? <span className="headerTag">{rightLabel}</span> : <span />}
+      </header>
+    );
+  }
+
+  function ProductThumb({ product, large = false }: { product: Product; large?: boolean }) {
+    return <div className={large ? "productThumb large" : "productThumb"}><span>{product.icon}</span></div>;
   }
 
   function renderHome() {
     return (
-      <>
-        {customerProfile ? (
-          <section className="dashboardCard" aria-label="Personalized TRRY dashboard">
-            <span className="stepBadge">My TRRY Lab</span>
-            <h2>Hi {customerProfile.name}, ready na?</h2>
-            <p>{customerProfile.customerType} / {actions.find((action) => action.screen === customerProfile.orderPath)?.title ?? "Custom order"}</p>
-            <button className="secondaryButton" onClick={() => navigate(customerProfile.orderPath)} type="button">
-              Continue My Path
+      <section className="screen homeScreen withNav" aria-labelledby="home-title">
+        <div className="homeTop">
+          <strong className="brandLockup">TRRY<span>*</span></strong>
+          <span className="estTag">EST. 2013</span>
+        </div>
+        <div className="homeHero">
+          <h1 id="home-title">CUSTOM APPAREL.<br />MADE SIMPLE.</h1>
+          <p>Browse the catalog. No sign-in needed.</p>
+        </div>
+        <div className="homeChoices" aria-label="TRRY order categories">
+          {["CUSTOM T-SHIRTS", "EMBROIDERY / CAPS", "UNIFORMS / BUSINESS ORDER"].map((label, index) => (
+            <button className="choiceCard" key={label} onClick={openCatalog} type="button">
+              <span className="choiceIcon">{index === 1 ? "CP" : index === 2 ? "UN" : "TS"}</span>
+              <span><small>0{index + 1}</small><strong>{label}</strong></span>
             </button>
-          </section>
-        ) : null}
-        <Hero />
-
-        <section className="actionSection" aria-labelledby="action-heading">
-          <div className="sectionIntro">
-            <span>Start dito</span>
-            <h2 id="action-heading">What are we making?</h2>
-          </div>
-
-          <div className="actionGrid">
-            {actions.map((action) => (
-              <ActionCard
-                helper={action.helper}
-                key={action.title}
-                onClick={() => navigate(action.screen)}
-                title={action.title}
-                tone={action.tone}
-              />
-            ))}
-          </div>
-        </section>
-
-        <OrderTrackerCard />
-      </>
+          ))}
+        </div>
+        <button className="limeCta" onClick={openCatalog} type="button">BROWSE CATALOG</button>
+        <button className="textLink" onClick={() => setScreen("trackInquiry")} type="button">Track an existing inquiry</button>
+        <BottomNav active="home" />
+      </section>
     );
   }
 
-  function renderShop() {
+  function renderCatalog() {
     return (
-      <section className="screenStack" aria-labelledby="shop-title">
-        <div className="screenHeader shopAccent">
-          <span>WALK-IN READY</span>
-          <h1 id="shop-title">TRRY Merch Lab</h1>
-          <p>Choose a base, send details, then wait for TRRY proof and quote.</p>
+      <section className="screen catalogScreen withNav" aria-labelledby="catalog-title">
+        <AppHeader backTo="home" />
+        <div className="catalogIntro">
+          <h1 id="catalog-title">CHOOSE YOUR PRODUCT.</h1>
+          <p>Pick an item to start your order.</p>
         </div>
-
-        <div className="productGrid">
-          {products.map((product) => (
-            <ProductCard
-              actionLabel={product.actionLabel}
-              description={product.description}
-              key={product.name}
-              name={product.name}
-              onAction={() => navigate(product.target)}
-              price={product.price}
-              tone={product.tone}
-            />
+        <div className="catalogGrid">
+          {PRODUCTS.map((product) => (
+            <button className="productCard" key={product.id} onClick={() => openProduct(product)} type="button">
+              <ProductThumb product={product} />
+              <strong>{product.name}</strong>
+              <span className="methodTags">{product.tags.map((tag) => <small key={tag}>{tag.replace(" Transfer", "")}</small>)}</span>
+              <span className="priceLine">From {formatMoney(product.basePrice)}</span>
+              <span className="blackCta">CUSTOMIZE</span>
+            </button>
           ))}
         </div>
+        <BottomNav active="catalog" />
       </section>
     );
   }
 
   function renderCustomize() {
     return (
-      <section className="screenStack">
-        <div className="flowStrip" aria-label="TRRY order flow">
-          <span>Send Design</span>
-          <span>Get Quote</span>
-          <span>Approve Proof</span>
-          <span>Print Time</span>
-        </div>
-        <RequestForm
-          description="Tell TRRY what shirt, color, size, and print style you want. This creates a pending review request only."
-          fields={customizeFields}
-          kicker="Pa-custom"
-          onSubmit={(values) => submitRequest("Custom Shirt", values, customizeFields)}
-          submitLabel="Submit Request"
-          title="Pa-custom Shirt"
-          tone="yellow"
-          layout="stacked"
-        />
-        <button className="inlineSwitch" onClick={() => navigate("canva")} type="button">
-          May Canva na? Send mo here.
-        </button>
+      <section className="screen customizeScreen withNav" aria-labelledby="customize-title">
+        <AppHeader backTo="catalog" />
+        <form className="customizeForm" onSubmit={submitInquiry} noValidate>
+          <section className="selectedProduct">
+            <ProductThumb product={activeProduct} large />
+            <div>
+              <span>NACI</span>
+              <strong>TRRY</strong>
+              <h1 id="customize-title">{activeProduct.name}</h1>
+              <p>From {formatMoney(activeProduct.basePrice)}</p>
+            </div>
+          </section>
+
+          <section className="formSection">
+            <h2>COLOR</h2>
+            <div className="swatches">{COLORS.map((item) => <button aria-label={item.name} className={color === item.name ? "selected" : ""} key={item.name} onClick={() => setColor(item.name)} style={{ background: item.value }} type="button" />)}</div>
+          </section>
+
+          <section className="formSection">
+            <h2>PRINT METHOD</h2>
+            <div className="methodCards">{activeProduct.tags.map((item) => <button className={method === item ? "selected" : ""} key={item} onClick={() => setMethod(item)} type="button"><strong>{item.toUpperCase()}</strong><small>{item === "DTF Transfer" ? "Full-color, detailed prints" : item === "Embroidery" ? "Stitched, premium finish" : "Best for bulk, bold colors"}</small></button>)}</div>
+          </section>
+
+          <section className="formSection">
+            <h2>SIZE RUN</h2>
+            <div className="sizeRunTable">{SIZES.map((size) => <div className="sizeRunRow" key={size}><strong>{size}</strong><button onClick={() => updateSize(size, -1)} type="button">-</button><span>{sizeRun[size]}</span><button onClick={() => updateSize(size, 1)} type="button">+</button></div>)}</div>
+            <div className="totalPieces"><span>TOTAL PIECES</span><strong>{totalPieces}</strong></div>
+            <p className={moqMet || totalPieces === 0 ? "moqNote" : "moqNote error"}>{activeProduct.moq.note}</p>
+          </section>
+
+          <section className="formSection artworkSection">
+            <h2>UPLOAD DESIGN</h2>
+            <label className="uploadDrop"><input accept=".png,.jpg,.jpeg,.pdf,.svg" onChange={(event) => handleUpload(event.target.files?.[0])} type="file" /><strong>{artworkName || "DROP YOUR FILE HERE"}</strong><small>Accepted: PNG, JPG, PDF, SVG</small></label>
+            {uploadStatus === "ready" ? <p className="uploadState good">Artwork ready for review.</p> : null}
+            {uploadStatus === "error" ? <p className="uploadState bad">{uploadMessage}</p> : null}
+            <label className="stackedField"><span>CANVA LINK OPTIONAL</span><input aria-invalid={!canvaValid} placeholder="https://canva.com/design/..." value={canvaLink} onChange={(event) => setCanvaLink(event.target.value)} /></label>
+          </section>
+
+          {method === "Embroidery" || activeProduct.referenceRequired ? (
+            <section className="formSection pinkBox">
+              <h2>PREVIOUS EMBROIDERY REFERENCE</h2>
+              <p>Already embroidered before? Send the prior job name or reference so TRRY can check if digitizing is ready.</p>
+              <input placeholder="Example: Polo logo batch 2025" value={previousReference} onChange={(event) => setPreviousReference(event.target.value)} />
+              <p>New embroidery logos may need digitizing review before pricing is final.</p>
+            </section>
+          ) : null}
+
+          <section className="formSection">
+            <h2>NEEDED DATE</h2>
+            <input value={neededDate} onChange={(event) => setNeededDate(event.target.value)} type="date" />
+          </section>
+
+          <section className="formSection">
+            <h2>NOTES OPTIONAL</h2>
+            <textarea placeholder="Placement, colors, deadline, etc." value={notes} onChange={(event) => setNotes(event.target.value)} />
+          </section>
+
+          <section className="formSection contactSection">
+            <h2>CONTACT</h2>
+            <input placeholder="Your full name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+            <input placeholder="Phone number or Messenger" value={customerContact} onChange={(event) => setCustomerContact(event.target.value)} />
+            <p>We'll use this to send your quote and production updates.</p>
+          </section>
+
+          <label className="rightsCheck"><input checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} type="checkbox" /> <span>I confirm I have the right to print this design.</span></label>
+          {formError ? <p className="formError" role="alert">{formError}</p> : null}
+
+          <div className="stickySubmit">
+            <span>TOTAL: {totalPieces} PCS</span>
+            <button className="limeCta" disabled={!canSubmit} type="submit">{isSubmitting ? "SUBMITTING" : "SUBMIT INQUIRY"}</button>
+          </div>
+        </form>
       </section>
     );
   }
 
-  function renderCanva() {
+  function renderSubmitted() {
+    const current = submittedInquiry;
     return (
-      <section className="screenStack">
-        <div className="flowStrip tealFlow" aria-label="TRRY Canva flow">
-          <span>Send Link</span>
-          <span>File Check</span>
-          <span>Quote</span>
-          <span>Approve Proof</span>
+      <section className="screen submittedScreen withNav" aria-labelledby="submitted-title">
+        <AppHeader />
+        <h1 id="submitted-title">INQUIRY SENT!</h1>
+        <p>We received your request. Our team will review it and send a quote.</p>
+        <div className="receiptBox">
+          <h2>TRRY INQUIRY RECEIPT</h2>
+          <dl>
+            <div><dt>REF NO.</dt><dd>{current?.ref}<button className="copyMini" onClick={() => current?.ref && navigator.clipboard?.writeText(current.ref)} type="button">COPY</button></dd></div>
+            <div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div>
+            <div><dt>TOTAL PIECES</dt><dd>{current?.totalPieces}</dd></div>
+            <div><dt>METHOD</dt><dd>{current?.method}</dd></div>
+            <div><dt>STATUS</dt><dd><mark>For Review</mark></dd></div>
+          </dl>
+          <p>No quote before review.<br />No print without approval.</p>
         </div>
-        <RequestForm
-          description="Paste your Canva link so TRRY can check the file and prepare it for quote approval."
-          fields={canvaFields}
-          kicker="SEND DESIGN"
-          onSubmit={(values) => submitRequest("Canva Link", values, canvaFields)}
-          submitLabel="Send Canva"
-          title="Send Canva"
-          tone="teal"
-        />
+        <a className="blackButton" href={MESSENGER_LINK} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a>
+        <TrackerCard />
+        <button className="outlineCta" onClick={() => setScreen("myInquiries")} type="button">VIEW ALL INQUIRIES</button>
+        <BottomNav active="myInquiries" />
       </section>
     );
   }
 
-  function renderUniforms() {
+  function TrackerCard() {
+    const steps = ["INQUIRY RECEIVED", "QUOTE AND REVIEW", "PROOF APPROVAL", "PRODUCTION", "PICKUP OR DELIVERY"];
+    return <div className="trackerCard"><h2>TRACK YOUR ORDER <span>STEP 1/5</span></h2><div className="bar"><span /></div>{steps.map((step, index) => <p className={index === 0 ? "active" : ""} key={step}>{index + 1}. {step}</p>)}<small>No quote before review. No print without approval. Est. quote reply within 24 hrs.</small></div>;
+  }
+
+  function renderMyInquiries() {
     return (
-      <section className="screenStack">
-        <div className="flowStrip purpleFlow" aria-label="TRRY Uniform Quote flow">
-          <span>Quote Na</span>
-          <span>Logo Check</span>
-          <span>Approve</span>
-          <span>Print Time</span>
+      <section className="screen myInquiriesScreen withNav" aria-labelledby="my-inquiries-title">
+        <AppHeader backTo="home" />
+        <h1 id="my-inquiries-title">MY INQUIRIES.</h1>
+        <p>Your submitted orders, by inquiry number.</p>
+        <button className="outlineCta" onClick={() => setScreen("trackInquiry")} type="button">TRACK AN INQUIRY</button>
+        <div className="inquiryList">
+          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {item.createdAt}</small><mark>{item.status === "FOR_REVIEW" ? "FOR REVIEW" : item.status.replace("_", " ")}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
         </div>
-        <RequestForm
-          description="Share your group order details so TRRY can review quantity, service, logo placement, and timeline."
-          fields={uniformFields}
-          kicker="UNIFORM PACKAGE"
-          onSubmit={(values) => submitRequest("Uniform Inquiry", values, uniformFields)}
-          submitLabel="Submit Quote"
-          title="Uniform Quote"
-          tone="purple"
-        />
+        <BottomNav active="myInquiries" />
       </section>
     );
   }
 
-  function renderConfirmation() {
-    if (!confirmation) {
-      return renderHome();
-    }
-
+  function renderTrackInquiry() {
     return (
-      <ConfirmationCard
-        onCreateAnother={() => navigate(getRequestTarget(confirmation))}
-        onHome={() => navigate("home")}
-        onTrack={() => navigate("track")}
-        request={confirmation}
-      />
+      <section className="screen trackInquiryScreen" aria-labelledby="track-title">
+        <AppHeader backTo="home" />
+        <h1 id="track-title">TRACK YOUR INQUIRY.</h1>
+        <p>Enter your inquiry number and contact to check its status.</p>
+        <form className="trackForm" onSubmit={(event) => { event.preventDefault(); setTrackSearched(true); }}>
+          <label><span>INQUIRY NUMBER</span><input placeholder="TRRY-5921" value={trackRef} onChange={(event) => setTrackRef(event.target.value)} /></label>
+          <label><span>CONTACT</span><input placeholder="Phone number or Messenger used in order" value={trackContact} onChange={(event) => setTrackContact(event.target.value)} /></label>
+          <button className="limeCta" type="submit">TRACK INQUIRY</button>
+        </form>
+        {trackSearched ? matchedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{matchedInquiry.ref}</dd></div><div><dt>PRODUCT</dt><dd>{matchedInquiry.productName}</dd></div><div><dt>STATUS</dt><dd><mark>For Review</mark></dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p><a className="blackButton" href={MESSENGER_LINK} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a></div> : null}
+        <button className="textLink" onClick={() => setScreen("home")} type="button">Back to Home</button>
+      </section>
     );
-  }
-
-  function renderScreen() {
-    if (screen === "shop") {
-      return renderShop();
-    }
-
-    if (screen === "customize") {
-      return renderCustomize();
-    }
-
-    if (screen === "canva") {
-      return renderCanva();
-    }
-
-    if (screen === "uniforms") {
-      return renderUniforms();
-    }
-
-    if (screen === "track") {
-      return <TrackRequest initialQuery={trackQuery} loadRequests={loadRequests} />;
-    }
-
-    if (screen === "confirmation") {
-      return renderConfirmation();
-    }
-
-    return renderHome();
   }
 
   return (
-    <main className="appShell">
-      <header className="topbar" aria-label="TRRY Apparel header">
-        <strong className="brandName">TRRY APPAREL</strong>
-        <div className="headerActions" aria-label="Customer actions">
-          <button className="iconButton profileButton" onClick={() => navigate("track")} type="button" aria-label="Open request tracking" title="Track requests">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 21c1.7-4.2 4.4-6 8-6s6.3 1.8 8 6" />
-            </svg>
-          </button>
-          <button className="iconButton cartButton" onClick={showCartNotice} type="button" aria-label="Cart coming soon" title="Cart coming soon">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M6 6h15l-2 8H8L6 3H3" />
-              <circle cx="9" cy="20" r="1.5" />
-              <circle cx="18" cy="20" r="1.5" />
-            </svg>
-          </button>
-        </div>
-      </header>
-      {cartNotice ? <div className="headerNotice" role="status">Cart coming soon</div> : null}
-
-      {onboardingStep !== "done" ? (
-        <section className="homeContent onboardingContent">{renderOnboarding()}</section>
-      ) : (
-        <>
-          <section className={screen === "home" ? "homeContent" : "screenContent"}>
-            {renderScreen()}
-          </section>
-
-          <BottomNav active={activeNav} onNavigate={navigate} />
-        </>
-      )}
+    <main className="phoneFrame">
+      {screen === "home" ? renderHome() : null}
+      {screen === "catalog" ? renderCatalog() : null}
+      {screen === "customize" ? renderCustomize() : null}
+      {screen === "submitted" ? renderSubmitted() : null}
+      {screen === "myInquiries" ? renderMyInquiries() : null}
+      {screen === "trackInquiry" ? renderTrackInquiry() : null}
     </main>
   );
 }
-
-
-
-
-
-
-
-
-
