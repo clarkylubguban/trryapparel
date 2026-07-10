@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-type Screen = "home" | "catalog" | "customize" | "submitted" | "myInquiries" | "trackInquiry";
+type Screen = "home" | "catalog" | "customize" | "submitted" | "myInquiries";
 type Method = "DTF Transfer" | "Embroidery" | "Screen Print";
 type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "2XL";
 type UploadStatus = "idle" | "ready" | "error";
@@ -277,7 +277,7 @@ export default function HomePage() {
           ))}
         </div>
         <button className="limeCta" onClick={openCatalog} type="button">BROWSE CATALOG</button>
-        <button className="textLink" onClick={() => setScreen("trackInquiry")} type="button">Track an existing inquiry</button>
+        <button className="textLink" onClick={() => { setTrackSearched(false); setScreen("myInquiries"); }} type="button">Track an existing inquiry</button>
         <BottomNav active="home" />
       </section>
     );
@@ -422,28 +422,16 @@ export default function HomePage() {
         <AppHeader backTo="home" />
         <h1 id="my-inquiries-title">MY INQUIRIES.</h1>
         <p>Your submitted orders, by inquiry number.</p>
-        <button className="outlineCta" onClick={() => setScreen("trackInquiry")} type="button">TRACK AN INQUIRY</button>
-        <div className="inquiryList">
-          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {item.createdAt}</small><mark>{item.status === "FOR_REVIEW" ? "FOR REVIEW" : item.status.replace("_", " ")}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
-        </div>
-        <BottomNav active="myInquiries" />
-      </section>
-    );
-  }
-
-  function renderTrackInquiry() {
-    return (
-      <section className="screen trackInquiryScreen" aria-labelledby="track-title">
-        <AppHeader backTo="home" />
-        <h1 id="track-title">TRACK YOUR INQUIRY.</h1>
-        <p>Enter your inquiry number and contact to check its status.</p>
         <form className="trackForm" onSubmit={(event) => { event.preventDefault(); setTrackSearched(true); }}>
           <label><span>INQUIRY NUMBER</span><input placeholder="TRRY-5921" value={trackRef} onChange={(event) => setTrackRef(event.target.value)} /></label>
           <label><span>CONTACT</span><input placeholder="Phone number or Messenger used in order" value={trackContact} onChange={(event) => setTrackContact(event.target.value)} /></label>
           <button className="limeCta" type="submit">TRACK INQUIRY</button>
         </form>
         {trackSearched ? matchedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{matchedInquiry.ref}</dd></div><div><dt>PRODUCT</dt><dd>{matchedInquiry.productName}</dd></div><div><dt>STATUS</dt><dd><mark>For Review</mark></dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p><a className="blackButton" href={MESSENGER_LINK} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a></div> : null}
-        <button className="textLink" onClick={() => setScreen("home")} type="button">Back to Home</button>
+        <div className="inquiryList">
+          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {item.createdAt}</small><mark>{item.status === "FOR_REVIEW" ? "FOR REVIEW" : item.status.replace("_", " ")}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
+        </div>
+        <BottomNav active="myInquiries" />
       </section>
     );
   }
@@ -455,9 +443,6 @@ export default function HomePage() {
       {screen === "customize" ? renderCustomize() : null}
       {screen === "submitted" ? renderSubmitted() : null}
       {screen === "myInquiries" ? renderMyInquiries() : null}
-      {screen === "trackInquiry" ? renderTrackInquiry() : null}
     </main>
   );
 }
-
-
