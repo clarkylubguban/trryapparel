@@ -8,7 +8,7 @@ type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "2XL";
 type UploadStatus = "idle" | "ready" | "error";
 type ArtworkSource = "upload" | "canva" | "send-later";
 type ArtworkUploadStatus = "not-needed" | "uploaded" | "failed";
-type InquiryStatus = "FOR REVIEW" | "IN PRODUCTION" | "DELIVERED";
+type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "IN PRODUCTION" | "DELIVERED" | "STATUS UPDATE";
 
 type SizeRun = Record<SizeKey, number>;
 
@@ -139,10 +139,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeStatus(value: unknown): InquiryStatus {
-  const status = String(value || "").trim().replace(/_/g, " ").toUpperCase();
-  if (status === "IN PRODUCTION") return "IN PRODUCTION";
-  if (status === "DELIVERED") return "DELIVERED";
-  return "FOR REVIEW";
+  const status = String(value || "").trim().replace(/_/g, " ").toLowerCase();
+  if (status === "new" || status === "for review") return "FOR REVIEW";
+  if (status === "quote" || status === "needs quote") return "NEEDS QUOTE";
+  if (status === "in production" || status === "production") return "IN PRODUCTION";
+  if (status === "delivered" || status === "completed") return "DELIVERED";
+  return "STATUS UPDATE";
 }
 
 function getArtworkSource(item: Record<string, unknown>): ArtworkSource {
@@ -229,6 +231,8 @@ export default function HomePage() {
   const [trackRef, setTrackRef] = useState("");
   const [trackContact, setTrackContact] = useState("");
   const [trackSearched, setTrackSearched] = useState(false);
+  const [trackedInquiry, setTrackedInquiry] = useState<Inquiry | null>(null);
+  const [isTracking, setIsTracking] = useState(false);
 
   useEffect(() => {
     setInquiries(getStoredInquiries());
@@ -247,7 +251,7 @@ export default function HomePage() {
   const hasArtworkPlan = Boolean(artworkName || canvaLink.trim() || artworkLater);
   const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
   const submitButtonText = isSubmitting ? submitStage === "uploading" ? "UPLOADING ARTWORK" : "SUBMITTING" : "SUBMIT INQUIRY";
-  const matchedInquiry = inquiries.find((item) => item.ref.toLowerCase() === trackRef.trim().toLowerCase() && cleanPhone(item.customerContact) === cleanPhone(trackContact));
+  const matchedInquiry = trackedInquiry;
   const messengerLink = `${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I want to ask about inquiry ${submittedInquiry?.ref || trackRef || ""}.`)}`;
 
   function resetFormForProduct(product: Product) {
@@ -491,6 +495,97 @@ export default function HomePage() {
       setSubmitStage("idle");
     }
   }
+  async function trackInquiry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const inquiryNumber = trackRef.trim();
+    const contact = trackContact.trim();
+
+    setTrackSearched(false);
+    setTrackedInquiry(null);
+
+    if (!inquiryNumber || !contact) {
+      setTrackSearched(true);
+      return;
+    }
+
+    setIsTracking(true);
+
+    try {
+      const response = await fetch("/api/inquiries/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inquiryNumber, contact }),
+      });
+
+      const result = await response.json().catch(() => ({})) as {
+        inquiry?: {
+          ref: string;
+          createdAt: string;
+          productName: string;
+          method: Method;
+          totalPieces: number;
+          customerName: string;
+          customerContact: string;
+          status: InquiryStatus;
+        };
+        error?: string;
+      };
+
+      if (!response.ok || !result.inquiry) {
+        setTrackSearched(true);
+        return;
+      }
+
+      const saved = getStoredInquiries();
+      const existing = saved.find((item) => item.ref.toLowerCase() === result.inquiry!.ref.toLowerCase());
+      const tracked: Inquiry = {
+        ...(existing || {
+          ref: result.inquiry.ref,
+          createdAt: result.inquiry.createdAt,
+          productId: "tracked-inquiry",
+          productName: result.inquiry.productName,
+          basePrice: 0,
+          method: result.inquiry.method,
+          methodMoq: METHOD_MOQ[result.inquiry.method],
+          color: "",
+          sizeRun: { ...EMPTY_SIZE_RUN },
+          totalPieces: result.inquiry.totalPieces,
+          canvaLink: "",
+          artworkName: "",
+          artworkSource: "send-later" as ArtworkSource,
+          artworkStoragePath: "",
+          artworkUploadStatus: "not-needed" as ArtworkUploadStatus,
+          artworkUploadedAt: "",
+          previousReference: "",
+          neededDate: "",
+          notes: "",
+          customerName: result.inquiry.customerName,
+          customerContact: result.inquiry.customerContact,
+          rightsConfirmed: false,
+          status: normalizeStatus(result.inquiry.status),
+        }),
+        ref: result.inquiry.ref,
+        createdAt: result.inquiry.createdAt,
+        productName: result.inquiry.productName,
+        method: result.inquiry.method,
+        totalPieces: result.inquiry.totalPieces,
+        customerName: result.inquiry.customerName,
+        customerContact: result.inquiry.customerContact,
+        status: normalizeStatus(result.inquiry.status),
+      };
+
+      const nextList = [tracked, ...saved.filter((item) => item.ref.toLowerCase() !== tracked.ref.toLowerCase())].slice(0, 20);
+      saveStoredInquiries(nextList);
+      setInquiries(nextList);
+      setTrackedInquiry(tracked);
+      setTrackSearched(true);
+    } catch {
+      setTrackSearched(true);
+    } finally {
+      setIsTracking(false);
+    }
+  }
   function BottomNav({ active }: { active: "home" | "catalog" | "myInquiries" }) {
     return (
       <nav className="bottomNav" aria-label="TRRY navigation">
@@ -535,7 +630,7 @@ export default function HomePage() {
           ))}
         </div>
         <button className="limeCta" onClick={openCatalog} type="button">BROWSE CATALOG</button>
-        <button className="textLink" onClick={() => { setTrackSearched(false); setScreen("myInquiries"); }} type="button">Track an existing inquiry</button>
+        <button className="textLink" onClick={() => { setTrackSearched(false); setTrackedInquiry(null); setScreen("myInquiries"); }} type="button">Track an existing inquiry</button>
         <BottomNav active="home" />
       </section>
     );
@@ -682,10 +777,10 @@ export default function HomePage() {
         <AppHeader backTo="home" />
         <h1 id="my-inquiries-title">MY INQUIRIES.</h1>
         <p>Your submitted orders, by inquiry number.</p>
-        <form className="trackForm" onSubmit={(event) => { event.preventDefault(); setTrackSearched(true); }}>
+        <form className="trackForm" onSubmit={trackInquiry}>
           <label><span>INQUIRY NUMBER</span><input placeholder="TRRY-5921" value={trackRef} onChange={(event) => setTrackRef(event.target.value)} /></label>
           <label><span>CONTACT</span><input placeholder="Phone number or Messenger used in order" value={trackContact} onChange={(event) => setTrackContact(event.target.value)} /></label>
-          <button className="limeCta" type="submit">TRACK INQUIRY</button>
+          <button className="limeCta" disabled={isTracking} type="submit">{isTracking ? "TRACKING" : "TRACK INQUIRY"}</button>
         </form>
         {trackSearched ? matchedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{matchedInquiry.ref}</dd></div><div><dt>PRODUCT</dt><dd>{matchedInquiry.productName}</dd></div><div><dt>STATUS</dt><dd><mark>{normalizeStatus(matchedInquiry.status)}</mark></dd></div><div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(matchedInquiry)}</dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryList">
