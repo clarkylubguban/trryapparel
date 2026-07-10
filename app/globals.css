@@ -76,7 +76,7 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
   letter-spacing: -0.05em;
 }
 .brandLockup { justify-self: start; }
-.trryLogo span, .brandLockup span { color: #9ed600; }
+.trryLogo span, .brandLockup span { color: var(--pink); }
 .estTag, .headerTag {
   border: var(--line-thin);
   background: var(--paper);
@@ -123,7 +123,7 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
 .choiceCard small { font-size: 0.62rem; font-weight: 950; }
 .choiceCard strong { font-size: 0.9rem; font-weight: 950; line-height: 1.08; text-transform: uppercase; }
 
-.limeCta, .outlineCta, .blackButton, .blackCta {
+.limeCta, .outlineCta, .blackButton {
   min-height: 48px;
   border: var(--line);
   box-shadow: var(--shadow);
@@ -222,7 +222,7 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
   padding: 10px 12px;
   text-align: left;
 }
-.methodCards .selected { background: #e8ffc0; }
+.methodCards .selected { background: var(--lime); }
 .methodCards strong { font-size: 0.82rem; font-weight: 950; }
 .methodCards small { color: var(--slate); font-size: 0.72rem; font-weight: 750; }
 .sizeRunTable { display: grid; gap: 7px; }
@@ -262,7 +262,7 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
 .uploadDrop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .uploadDrop strong { font-size: 0.82rem; }
 .uploadDrop small, .uploadState, .moqNote, .pinkBox p, .contactSection p { color: var(--slate); font-size: 0.68rem; font-weight: 850; }
-.uploadState.good { border: 1px solid #81b800; background: #f4ffd8; padding: 9px; }
+.uploadState.good { border: var(--line-thin); background: transparent; padding: 9px; }
 .stackedField { display: grid; gap: 7px; }
 input, textarea {
   width: 100%;
@@ -309,7 +309,7 @@ dl { display: grid; gap: 7px; }
 dl div { display: flex; justify-content: space-between; gap: 12px; }
 dt { color: var(--slate); font-size: 0.66rem; font-weight: 950; text-transform: uppercase; }
 dd { margin: 0; font-family: var(--mono); font-size: 0.72rem; font-weight: 950; text-align: right; }
-mark { background: var(--lime); padding: 2px 6px; }
+mark { background: transparent; border: var(--line-thin); padding: 2px 6px; }
 .copyMini { margin-left: 6px; border: var(--line-thin); background: transparent; box-shadow: none; font-family: var(--mono); font-size: 0.58rem; font-weight: 950; }
 .receiptBox p { margin-top: 10px; border-top: var(--line-thin); padding-top: 9px; font-family: var(--mono); font-size: 0.7rem; }
 .trackerCard { background: #101010; color: #fff; }
@@ -321,7 +321,7 @@ mark { background: var(--lime); padding: 2px 6px; }
 .trackerCard p.active { color: var(--lime); }
 .trackerCard small { display: block; margin-top: 12px; color: #fff; line-height: 1.4; }
 
-.myInquiriesScreen h1, .trackInquiryScreen h1 { font-size: clamp(1.65rem, 7vw, 2.1rem); }
+.myInquiriesScreen h1 { font-size: clamp(1.65rem, 7vw, 2.1rem); }
 .inquiryList { display: grid; gap: 10px; }
 .inquiryItem { display: grid; gap: 4px; width: 100%; }
 .inquiryItem strong { font-size: 0.82rem; }

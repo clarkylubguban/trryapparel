@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
@@ -315,8 +315,6 @@ export default function HomePage() {
           <section className="selectedProduct">
             <ProductThumb product={activeProduct} large />
             <div>
-              <span>NACI</span>
-              <strong>TRRY</strong>
               <h1 id="customize-title">{activeProduct.name}</h1>
               <p>From {formatMoney(activeProduct.basePrice)}</p>
             </div>
