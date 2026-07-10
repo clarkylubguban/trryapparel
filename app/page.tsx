@@ -8,7 +8,7 @@ type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "2XL";
 type UploadStatus = "idle" | "ready" | "error";
 type ArtworkSource = "upload" | "canva" | "send-later";
 type ArtworkUploadStatus = "not-needed" | "uploaded" | "failed";
-type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "IN PRODUCTION" | "DELIVERED" | "STATUS UPDATE";
+type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "IN PRODUCTION" | "DELIVERED" | "STATUS UPDATE" | "STATUS ERROR";
 
 type SizeRun = Record<SizeKey, number>;
 
@@ -53,17 +53,13 @@ type Inquiry = {
   status: InquiryStatus;
 };
 type TrackedInquiry = {
-  ref: string;
-  createdAt: string;
-  productName: string;
-  method: Method;
-  totalPieces: number;
-  quantitySummary: string;
-  customerName: string;
-  customerContact: string;
-  statusLabel: InquiryStatus;
-  nextAction: string;
+  id: string;
+  product: string;
+  quantity: string;
+  submittedAt: string;
   artworkLabel: string;
+  statusKey: string;
+  statusLabel: InquiryStatus;
 };
 
 const PRODUCTS: Product[] = [
@@ -264,7 +260,6 @@ export default function HomePage() {
   const hasArtworkPlan = Boolean(artworkName || canvaLink.trim() || artworkLater);
   const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
   const submitButtonText = isSubmitting ? submitStage === "uploading" ? "UPLOADING ARTWORK" : "SUBMITTING" : "SUBMIT INQUIRY";
-  const matchedInquiry = trackedInquiry;
   const messengerLink = `${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I want to ask about inquiry ${submittedInquiry?.ref || trackRef || ""}.`)}`;
 
   function resetFormForProduct(product: Product) {
@@ -531,85 +526,40 @@ export default function HomePage() {
         body: JSON.stringify({ inquiryNumber, contact }),
       });
 
-      const result = await response.json().catch(() => ({})) as {
-        inquiry?: {
-          ref: string;
-          createdAt: string;
-          productName: string;
-          method: Method;
-          totalPieces: number;
-          customerName: string;
-          customerContact: string;
-          status?: string;
-          statusLabel?: string;
-          quantitySummary?: string;
-          nextAction?: string;
-        };
+      const data = await response.json().catch(() => ({})) as {
+        ok?: boolean;
+        inquiry?: TrackedInquiry;
         error?: string;
       };
 
-      if (!response.ok || !result.inquiry) {
+      if (!response.ok || !data.ok || !data.inquiry) {
         setTrackSearched(true);
         return;
       }
 
+      const freshInquiry: TrackedInquiry = {
+        ...data.inquiry,
+        statusLabel: data.inquiry.statusLabel || "STATUS ERROR",
+      };
+
       const saved = getStoredInquiries();
-      const existing = saved.find((item) => item.ref.toLowerCase() === result.inquiry!.ref.toLowerCase());
-      const statusLabel = normalizeStatus(result.inquiry.statusLabel || result.inquiry.status);
-      const serverTrackedInquiry: TrackedInquiry = {
-        ref: result.inquiry.ref,
-        createdAt: result.inquiry.createdAt,
-        productName: result.inquiry.productName,
-        method: result.inquiry.method,
-        totalPieces: result.inquiry.totalPieces,
-        quantitySummary: result.inquiry.quantitySummary || `${result.inquiry.totalPieces} pcs`,
-        customerName: result.inquiry.customerName,
-        customerContact: result.inquiry.customerContact,
-        statusLabel,
-        nextAction: result.inquiry.nextAction || "",
-        artworkLabel: existing ? getArtworkStateLabel(existing) : "Artwork will be sent later",
-      };
+      const existing = saved.find((item) => item.ref.toLowerCase() === freshInquiry.id.toLowerCase());
 
-      const refreshedLocalInquiry: Inquiry = {
-        ...(existing || {
-          ref: serverTrackedInquiry.ref,
-          createdAt: serverTrackedInquiry.createdAt,
-          productId: "tracked-inquiry",
-          productName: serverTrackedInquiry.productName,
-          basePrice: 0,
-          method: serverTrackedInquiry.method,
-          methodMoq: METHOD_MOQ[serverTrackedInquiry.method],
-          color: "",
-          sizeRun: { ...EMPTY_SIZE_RUN },
-          totalPieces: serverTrackedInquiry.totalPieces,
-          canvaLink: "",
-          artworkName: "",
-          artworkSource: "send-later" as ArtworkSource,
-          artworkStoragePath: "",
-          artworkUploadStatus: "not-needed" as ArtworkUploadStatus,
-          artworkUploadedAt: "",
-          previousReference: "",
-          neededDate: "",
-          notes: "",
-          customerName: serverTrackedInquiry.customerName,
-          customerContact: serverTrackedInquiry.customerContact,
-          rightsConfirmed: false,
-          status: statusLabel,
-        }),
-        ref: serverTrackedInquiry.ref,
-        createdAt: serverTrackedInquiry.createdAt,
-        productName: serverTrackedInquiry.productName,
-        method: serverTrackedInquiry.method,
-        totalPieces: serverTrackedInquiry.totalPieces,
-        customerName: serverTrackedInquiry.customerName,
-        customerContact: serverTrackedInquiry.customerContact,
-        status: statusLabel,
-      };
+      if (existing) {
+        const refreshedLocalInquiry: Inquiry = {
+          ...existing,
+          ref: freshInquiry.id,
+          createdAt: freshInquiry.submittedAt,
+          productName: freshInquiry.product,
+          totalPieces: Number.parseInt(freshInquiry.quantity, 10) || existing.totalPieces,
+          status: normalizeStatus(freshInquiry.statusLabel),
+        };
+        const nextList = [refreshedLocalInquiry, ...saved.filter((item) => item.ref.toLowerCase() !== refreshedLocalInquiry.ref.toLowerCase())].slice(0, 20);
+        saveStoredInquiries(nextList);
+        setInquiries(nextList);
+      }
 
-      const nextList = [refreshedLocalInquiry, ...saved.filter((item) => item.ref.toLowerCase() !== refreshedLocalInquiry.ref.toLowerCase())].slice(0, 20);
-      saveStoredInquiries(nextList);
-      setInquiries(nextList);
-      setTrackedInquiry(serverTrackedInquiry);
+      setTrackedInquiry(freshInquiry);
       setTrackSearched(true);
     } catch {
       setTrackSearched(true);
@@ -617,6 +567,7 @@ export default function HomePage() {
       setIsTracking(false);
     }
   }
+
   function BottomNav({ active }: { active: "home" | "catalog" | "myInquiries" }) {
     return (
       <nav className="bottomNav" aria-label="TRRY navigation">
@@ -813,7 +764,7 @@ export default function HomePage() {
           <label><span>CONTACT</span><input placeholder="Phone number or Messenger used in order" value={trackContact} onChange={(event) => setTrackContact(event.target.value)} /></label>
           <button className="limeCta" disabled={isTracking} type="submit">{isTracking ? "TRACKING" : "TRACK INQUIRY"}</button>
         </form>
-        {trackSearched ? matchedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{matchedInquiry.ref}</dd></div><div><dt>PRODUCT</dt><dd>{matchedInquiry.productName}</dd></div><div><dt>STATUS</dt><dd><mark>{matchedInquiry.statusLabel}</mark></dd></div><div><dt>ARTWORK</dt><dd>{matchedInquiry.artworkLabel}</dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
+        {trackSearched ? trackedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{trackedInquiry.quantity}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryList">
           {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><mark>{normalizeStatus(item.status)}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
         </div>
