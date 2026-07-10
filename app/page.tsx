@@ -51,6 +51,8 @@ type Inquiry = {
   customerContact: string;
   rightsConfirmed: boolean;
   status: InquiryStatus;
+  statusKey: string;
+  statusLabel: InquiryStatus;
 };
 type TrackedInquiry = {
   id: string;
@@ -202,6 +204,8 @@ function getStoredInquiries(): Inquiry[] {
         customerContact: typeof item.customerContact === "string" ? item.customerContact : "",
         rightsConfirmed: item.rightsConfirmed === true,
         status: normalizeStatus(item.status),
+        statusKey: typeof item.statusKey === "string" ? item.statusKey : "legacy",
+        statusLabel: typeof item.statusLabel === "string" ? normalizeStatus(item.statusLabel) : normalizeStatus(item.status),
       }];
     });
   } catch {
@@ -486,6 +490,8 @@ export default function HomePage() {
         customerContact: customerContact.trim(),
         rightsConfirmed,
         status: normalizeStatus(result.status),
+        statusKey: normalizeStatus(result.status) === "FOR REVIEW" ? "new" : "submitted",
+        statusLabel: normalizeStatus(result.status),
       };
 
       const nextList = [nextInquiry, ...savedInquiries].slice(0, 20);
@@ -553,6 +559,8 @@ export default function HomePage() {
           productName: freshInquiry.product,
           totalPieces: Number.parseInt(freshInquiry.quantity, 10) || existing.totalPieces,
           status: normalizeStatus(freshInquiry.statusLabel),
+          statusKey: freshInquiry.statusKey,
+          statusLabel: freshInquiry.statusLabel,
         };
         const nextList = [refreshedLocalInquiry, ...saved.filter((item) => item.ref.toLowerCase() !== refreshedLocalInquiry.ref.toLowerCase())].slice(0, 20);
         saveStoredInquiries(nextList);
@@ -733,7 +741,7 @@ export default function HomePage() {
             <div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div>
             <div><dt>TOTAL PIECES</dt><dd>{current?.totalPieces}</dd></div>
             <div><dt>METHOD</dt><dd>{current?.method}</dd></div>
-            <div><dt>STATUS</dt><dd><mark>{normalizeStatus(current?.status)}</mark></dd></div>
+            <div><dt>STATUS</dt><dd><mark>{current?.statusLabel || "STATUS ERROR"}</mark></dd></div>
             <div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div>
           </dl>
           <p>No quote before review.<br />No print without approval.</p>
@@ -766,7 +774,7 @@ export default function HomePage() {
         </form>
         {trackSearched ? trackedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{trackedInquiry.quantity}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryList">
-          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><mark>{normalizeStatus(item.status)}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
+          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><mark>{item.statusLabel || "STATUS ERROR"}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
         </div>
         <BottomNav active="myInquiries" />
       </section>
