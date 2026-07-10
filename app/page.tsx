@@ -65,6 +65,14 @@ const COLORS = [
 
 const SIZES: SizeKey[] = ["XS", "S", "M", "L", "XL", "2XL"];
 const EMPTY_SIZE_RUN: SizeRun = { XS: 0, S: 0, M: 0, L: 0, XL: 0, "2XL": 0 };
+
+function createSizeRunForProduct(product: Product): SizeRun {
+  const nextSizeRun = { ...EMPTY_SIZE_RUN };
+  product.availableSizes.forEach((size) => {
+    nextSizeRun[size] = 0;
+  });
+  return nextSizeRun;
+}
 const STORAGE_KEY = "trry_inquiries_v3";
 const MESSENGER_LINK = "https://m.me/trryapparel";
 
@@ -128,7 +136,7 @@ export default function HomePage() {
     setCustomerContact(window.localStorage.getItem("customerContact") || "");
   }, []);
 
-  const totalPieces = useMemo(() => SIZES.reduce((sum, size) => sum + sizeRun[size], 0), [sizeRun]);
+  const totalPieces = useMemo(() => activeProduct.availableSizes.reduce((sum, size) => sum + sizeRun[size], 0), [activeProduct.availableSizes, sizeRun]);
   const canvaValid = !canvaLink.trim() || /^https?:\/\/(www\.)?canva\.com\/.+/i.test(canvaLink.trim());
   const moqMet = totalPieces >= activeProduct.moq.minimum;
   const canSubmit = totalPieces > 0 && moqMet && canvaValid && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
@@ -138,7 +146,7 @@ export default function HomePage() {
     setActiveProduct(product);
     setColor("Sand");
     setMethod(product.tags[0]);
-    setSizeRun({ ...EMPTY_SIZE_RUN });
+    setSizeRun(createSizeRunForProduct(product));
     setCanvaLink("");
     setArtworkName("");
     setUploadStatus("idle");
@@ -326,7 +334,7 @@ export default function HomePage() {
 
           <section className="formSection">
             <h2>SIZE RUN</h2>
-            <div className="sizeRunTable">{SIZES.map((size) => <div className="sizeRunRow" key={size}><strong>{size}</strong><button onClick={() => updateSize(size, -1)} type="button">-</button><span>{sizeRun[size]}</span><button onClick={() => updateSize(size, 1)} type="button">+</button></div>)}</div>
+            <div className="sizeRunTable">{activeProduct.availableSizes.map((size) => <div className="sizeRunRow" key={size}><strong>{size}</strong><button onClick={() => updateSize(size, -1)} type="button">-</button><span>{sizeRun[size]}</span><button onClick={() => updateSize(size, 1)} type="button">+</button></div>)}</div>
             <div className="totalPieces"><span>TOTAL PIECES</span><strong>{totalPieces}</strong></div>
             <p className={moqMet || totalPieces === 0 ? "moqNote" : "moqNote error"}>{activeProduct.moq.note}</p>
           </section>
@@ -451,3 +459,5 @@ export default function HomePage() {
     </main>
   );
 }
+
+
