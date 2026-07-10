@@ -17,13 +17,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function sizeRunSummary(value: unknown) {
-  if (!isRecord(value)) return "No size run provided";
+  if (!isRecord(value)) return "";
 
   const entries = Object.entries(value)
     .filter(([, qty]) => typeof qty === "number" && Number.isFinite(qty) && qty > 0)
     .map(([size, qty]) => `${size}: ${qty}`);
 
-  return entries.length ? entries.join(", ") : "No size run provided";
+  return entries.join(", ");
 }
 
 function generateReferenceCandidate() {
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
   }
 
   const sizeSummary = sizeRunSummary(body.sizeRun);
-  const quantitySummary = `${totalPieces} pcs (${sizeSummary})`;
+  const quantitySummary = sizeSummary ? `${totalPieces} pcs (${sizeSummary})` : `${totalPieces} ${totalPieces === 1 ? "pc" : "pcs"}`;
   const createdAt = new Date().toISOString();
 
   try {
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
       `Method: ${method}`,
       `Method MOQ: ${Number.isFinite(methodMoq) ? methodMoq : "not provided"}`,
       `Total quantity: ${totalPieces}`,
-      `Size run: ${sizeSummary}`,
+      `Size run: ${sizeSummary || "Not applicable"}`,
       `Artwork source: ${artworkSource}`,
       `Canva link: ${canvaLink || "none"}`,
       `Uploaded filename: ${artworkName || "none"}`,

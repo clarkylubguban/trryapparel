@@ -25,6 +25,7 @@ type Product = {
     note: string;
   };
   referenceRequired?: boolean;
+  sizing: "sized" | "quantity-only";
 };
 
 type Inquiry = {
@@ -65,12 +66,12 @@ type TrackedInquiry = {
 };
 
 const PRODUCTS: Product[] = [
-  { id: "premium-cotton-shirt", name: "Premium Cotton Shirt", description: "Soft daily shirt for prints and slogans.", basePrice: 280, icon: "TS", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 1, note: "Minimum order: 1 piece." } },
-  { id: "caps", name: "Caps", description: "Logo caps for crews and teams.", basePrice: 180, icon: "CP", tags: ["Embroidery"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
-  { id: "boxy-crop-shirt", name: "Boxy Crop Shirt", description: "Boxy fit merch shirt.", basePrice: 300, icon: "BX", tags: ["DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 1, note: "Minimum order: 1 piece." } },
-  { id: "polo-uniform", name: "Polo Uniform", description: "Business polo with logo placement.", basePrice: 350, icon: "PL", tags: ["Embroidery", "DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
-  { id: "tote-bag", name: "Tote Bag", description: "Reusable merch and event bag.", basePrice: 220, icon: "TB", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 1, note: "Minimum order: 1 piece." } },
-  { id: "towels", name: "Towels", description: "Premium giveaway or team towels.", basePrice: 200, icon: "TW", tags: ["Embroidery"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
+  { id: "premium-cotton-shirt", name: "Premium Cotton Shirt", description: "Soft daily shirt for prints and slogans.", basePrice: 280, icon: "TS", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "caps", name: "Caps", description: "Logo caps for crews and teams.", basePrice: 180, icon: "CP", tags: ["Embroidery"], availableSizes: [], sizing: "quantity-only", moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
+  { id: "boxy-crop-shirt", name: "Boxy Crop Shirt", description: "Boxy fit merch shirt.", basePrice: 300, icon: "BX", tags: ["DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "polo-uniform", name: "Polo Uniform", description: "Business polo with logo placement.", basePrice: 350, icon: "PL", tags: ["Embroidery", "DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], sizing: "sized", moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
+  { id: "tote-bag", name: "Tote Bag", description: "Reusable merch and event bag.", basePrice: 220, icon: "TB", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "towels", name: "Towels", description: "Premium giveaway or team towels.", basePrice: 200, icon: "TW", tags: ["Embroidery"], availableSizes: [], sizing: "quantity-only", moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
 ];
 
 const METHOD_MOQ: Record<Method, number> = {
@@ -223,6 +224,7 @@ export default function HomePage() {
   const [color, setColor] = useState("Sand");
   const [method, setMethod] = useState<Method>(PRODUCTS[0].tags[0]);
   const [sizeRun, setSizeRun] = useState<SizeRun>(EMPTY_SIZE_RUN);
+  const [quantityOnly, setQuantityOnly] = useState(0);
   const [canvaLink, setCanvaLink] = useState("");
   const [artworkName, setArtworkName] = useState("");
   const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
@@ -253,7 +255,8 @@ export default function HomePage() {
     setCustomerContact(window.localStorage.getItem("customerContact") || "");
   }, []);
 
-  const totalPieces = useMemo(() => activeProduct.availableSizes.reduce((sum, size) => sum + sizeRun[size], 0), [activeProduct.availableSizes, sizeRun]);
+  const isQuantityOnlyProduct = activeProduct.sizing === "quantity-only";
+  const totalPieces = useMemo(() => isQuantityOnlyProduct ? quantityOnly : activeProduct.availableSizes.reduce((sum, size) => sum + sizeRun[size], 0), [activeProduct.availableSizes, isQuantityOnlyProduct, quantityOnly, sizeRun]);
   const canvaValid = !canvaLink.trim() || /^https?:\/\/(www\.)?canva\.com\/.+/i.test(canvaLink.trim());
   const requiredMoq = METHOD_MOQ[method];
   const remainingPieces = requiredMoq > totalPieces ? requiredMoq - totalPieces : 0;
@@ -271,6 +274,7 @@ export default function HomePage() {
     setColor("Sand");
     setMethod(product.tags[0]);
     setSizeRun(createSizeRunForProduct(product));
+    setQuantityOnly(0);
     setCanvaLink("");
     setArtworkName("");
     setSelectedArtworkFile(null);
@@ -297,6 +301,10 @@ export default function HomePage() {
 
   function updateSize(size: SizeKey, delta: number) {
     setSizeRun((current) => ({ ...current, [size]: Math.max(0, current[size] + delta) }));
+  }
+
+  function updateQuantityOnly(delta: number) {
+    setQuantityOnly((current) => Math.max(0, current + delta));
   }
 
   function handleUpload(file: File | undefined) {
@@ -389,7 +397,7 @@ export default function HomePage() {
   async function submitInquiry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) {
-      if (!totalPieces) setFormError("Add at least one size quantity before submitting.");
+      if (!totalPieces) setFormError(isQuantityOnlyProduct ? "Add a quantity before submitting." : "Add at least one size quantity before submitting.");
       else if (!moqMet) setFormError(moqNote);
       else if (!canvaValid) setFormError("Canva link must be a valid canva.com link.");
       else if (!hasArtworkPlan) setFormError("Upload artwork, paste a Canva link, or choose send artwork later.");
@@ -421,7 +429,7 @@ export default function HomePage() {
           method,
           methodMoq: requiredMoq,
           color,
-          sizeRun,
+          sizeRun: isQuantityOnlyProduct ? {} : sizeRun,
           totalPieces,
           canvaLink: canvaLink.trim(),
           artworkName,
@@ -475,7 +483,7 @@ export default function HomePage() {
         method,
         methodMoq: requiredMoq,
         color,
-        sizeRun,
+        sizeRun: isQuantityOnlyProduct ? { ...EMPTY_SIZE_RUN } : sizeRun,
         totalPieces,
         canvaLink: canvaLink.trim(),
         artworkName: uploadedArtworkName,
@@ -674,8 +682,8 @@ export default function HomePage() {
           </section>
 
           <section className="formSection">
-            <h2>SIZE RUN</h2>
-            <div className="sizeRunTable">{activeProduct.availableSizes.map((size) => <div className="sizeRunRow" key={size}><strong>{size}</strong><button onClick={() => updateSize(size, -1)} type="button">-</button><span>{sizeRun[size]}</span><button onClick={() => updateSize(size, 1)} type="button">+</button></div>)}</div>
+            <h2>{isQuantityOnlyProduct ? "QUANTITY" : "SIZE RUN"}</h2>
+            {isQuantityOnlyProduct ? <div className="quantityOnlyControl"><button onClick={() => updateQuantityOnly(-1)} type="button">-</button><strong>{quantityOnly}</strong><button onClick={() => updateQuantityOnly(1)} type="button">+</button></div> : <div className="sizeRunTable">{activeProduct.availableSizes.map((size) => <div className="sizeRunRow" key={size}><strong>{size}</strong><button onClick={() => updateSize(size, -1)} type="button">-</button><span>{sizeRun[size]}</span><button onClick={() => updateSize(size, 1)} type="button">+</button></div>)}</div>}
             <div className="totalPieces"><span>TOTAL PIECES</span><strong>{totalPieces}</strong></div>
             <p className={moqMet || totalPieces === 0 ? "moqNote" : "moqNote error"}>{moqNote}</p>
           </section>
@@ -719,7 +727,7 @@ export default function HomePage() {
           {formError ? <p className="formError" role="alert">{formError}</p> : null}
 
           <div className="stickySubmit">
-            <span>TOTAL: {totalPieces} PCS</span>
+            <span>TOTAL: {totalPieces} {totalPieces === 1 ? "PC" : "PCS"}</span>
             <button className="limeCta" disabled={!canSubmit} type="submit">{submitButtonText}</button>
           </div>
         </form>

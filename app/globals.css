@@ -245,6 +245,22 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
   font-family: var(--mono);
   font-weight: 950;
 }
+.quantityOnlyControl {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  border: var(--line-thin);
+}
+.quantityOnlyControl button, .quantityOnlyControl strong {
+  display: grid;
+  min-height: 44px;
+  place-items: center;
+  background: var(--surface);
+  border: 0;
+  font-family: var(--mono);
+  font-weight: 950;
+}
+.quantityOnlyControl button:first-child { border-right: var(--line-thin); }
+.quantityOnlyControl button:last-child { border-left: var(--line-thin); }
 .totalPieces { display: flex; justify-content: space-between; border-top: var(--line); padding-top: 8px; font-family: var(--mono); font-weight: 950; }
 .moqNote { border: 1px solid var(--pink); padding: 8px; color: var(--slate); font-family: var(--mono); font-size: 0.66rem; font-weight: 950; }
 .moqNote.error, .formError, .uploadState.bad, .notFound { border: 1px solid var(--pink); background: #fff0f6; padding: 9px; }
