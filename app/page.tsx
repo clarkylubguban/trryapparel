@@ -105,6 +105,7 @@ function createSizeRunForProduct(product: Product): SizeRun {
 }
 const STORAGE_KEY = "trry_inquiries_v3";
 const MESSENGER_LINK = "https://m.me/trryapparel";
+const TRACKER_STEPS = ["INQUIRY RECEIVED", "QUOTE AND REVIEW", "PROOF APPROVAL", "PRODUCTION", "PICKUP OR DELIVERY"];
 
 function formatMoney(value: number) {
   return "\u20b1" + value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -181,6 +182,16 @@ function normalizeStatus(value: unknown): InquiryStatus {
   if (status === "in production" || status === "production") return "IN PRODUCTION";
   if (status === "delivered" || status === "completed") return "DELIVERED";
   return "STATUS UPDATE";
+}
+
+function getInquiryProgress(statusKey: unknown) {
+  const status = String(statusKey || "").trim().replace(/_/g, " ").toLowerCase();
+
+  if (status === "quote" || status === "needs quote") {
+    return { step: 2, label: "QUOTE AND REVIEW", progress: 40 };
+  }
+
+  return { step: 1, label: "INQUIRY RECEIVED", progress: 20 };
 }
 
 function getArtworkSource(item: Record<string, unknown>): ArtworkSource {
@@ -873,16 +884,17 @@ export default function HomePage() {
         {formError ? <p className="formError" role="alert">{formError}</p> : null}
         {current?.artworkSource === "upload" && current.artworkUploadStatus === "failed" ? <button className="outlineCta" disabled={retryingArtwork} onClick={retryArtworkUpload} type="button">{retryingArtwork ? "UPLOADING ARTWORK" : "RETRY ARTWORK UPLOAD"}</button> : null}
         <a className="blackButton" href={messengerLink} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a>
-        <TrackerCard />
+        <TrackerCard statusKey={current?.statusKey} />
         <button className="outlineCta" onClick={() => setScreen("myInquiries")} type="button">VIEW ALL INQUIRIES</button>
         <BottomNav active="myInquiries" />
       </section>
     );
   }
 
-  function TrackerCard() {
-    const steps = ["INQUIRY RECEIVED", "QUOTE AND REVIEW", "PROOF APPROVAL", "PRODUCTION", "PICKUP OR DELIVERY"];
-    return <div className="trackerCard"><h2>TRACK YOUR ORDER <span>STEP 1/5</span></h2><div className="bar"><span /></div>{steps.map((step, index) => <p className={index === 0 ? "active" : ""} key={step}>{index + 1}. {step}</p>)}<small>No quote before review. No print without approval. Est. quote reply within 24 hrs.</small></div>;
+  function TrackerCard({ statusKey }: { statusKey?: string }) {
+    const progress = getInquiryProgress(statusKey);
+
+    return <div className="trackerCard"><h2>TRACK YOUR ORDER <span>STEP {progress.step}/5</span></h2><div className="bar"><span style={{ width: `${progress.progress}%` }} /></div>{TRACKER_STEPS.map((step, index) => <p className={index === progress.step - 1 ? "active" : ""} key={step}>{index + 1}. {step}</p>)}<small>No quote before review. No print without approval. Est. quote reply within 24 hrs.</small></div>;
   }
 
   function renderMyInquiries() {
