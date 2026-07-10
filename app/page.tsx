@@ -50,6 +50,7 @@ type Inquiry = {
   notes: string;
   customerName: string;
   customerContact: string;
+  contact?: string;
   rightsConfirmed: boolean;
   status: InquiryStatus;
   statusKey: string;
@@ -79,6 +80,7 @@ const METHOD_MOQ: Record<Method, number> = {
   Embroidery: 1,
   "Screen Print": 30,
 };
+const TRACKED_METHODS = Object.keys(METHOD_MOQ) as Method[];
 
 const COLORS = [
   { name: "Black", value: "#111111" },
@@ -105,7 +107,7 @@ const STORAGE_KEY = "trry_inquiries_v3";
 const MESSENGER_LINK = "https://m.me/trryapparel";
 
 function formatMoney(value: number) {
-  return `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return "\u20b1" + value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function makeRef(existing: Inquiry[] = []) {
@@ -125,6 +127,23 @@ function formatCustomerDate(value: string) {
 function parseTotalPiecesFromQuantity(value: string) {
   const match = value.match(/\d+/);
   return match ? Number(match[0]) : 0;
+}
+
+function formatPieceCount(totalPieces: number) {
+  return `${totalPieces} ${totalPieces === 1 ? "pc" : "pcs"}`;
+}
+
+function normalizeQuantityDisplay(value: string) {
+  return value.replace(/^1\s+pcs\b/i, "1 pc");
+}
+
+function getMethodFromTrackedProduct(product: string): Method {
+  return TRACKED_METHODS.find((item) => product.toLowerCase().includes(item.toLowerCase())) || "DTF Transfer";
+}
+
+function getProductNameFromTrackedProduct(product: string, method: Method) {
+  const suffix = ` - ${method}`;
+  return product.toLowerCase().endsWith(suffix.toLowerCase()) ? product.slice(0, -suffix.length).trim() : product;
 }
 
 
@@ -207,7 +226,8 @@ function getStoredInquiries(): Inquiry[] {
         neededDate: typeof item.neededDate === "string" ? item.neededDate : "",
         notes: typeof item.notes === "string" ? item.notes : "",
         customerName: typeof item.customerName === "string" ? item.customerName : "",
-        customerContact: typeof item.customerContact === "string" ? item.customerContact : "",
+        customerContact: typeof item.customerContact === "string" ? item.customerContact : typeof item.contact === "string" ? item.contact : "",
+        contact: typeof item.contact === "string" ? item.contact : typeof item.customerContact === "string" ? item.customerContact : "",
         rightsConfirmed: item.rightsConfirmed === true,
         status: normalizeStatus(item.status),
         statusKey: typeof item.statusKey === "string" ? item.statusKey : "legacy",
@@ -330,6 +350,41 @@ export default function HomePage() {
       createdAt: freshInquiry.submittedAt,
       productName: freshInquiry.product,
       totalPieces: parseTotalPiecesFromQuantity(freshInquiry.quantity) || oldItem.totalPieces,
+      customerContact: oldItem.customerContact,
+      contact: oldItem.contact || oldItem.customerContact,
+      status: normalizeStatus(freshInquiry.statusLabel),
+      statusKey: freshInquiry.statusKey,
+      statusLabel: freshInquiry.statusLabel || "STATUS ERROR",
+    };
+  }
+
+  function createInquiryFromTracked(freshInquiry: TrackedInquiry, contact: string): Inquiry {
+    const method = getMethodFromTrackedProduct(freshInquiry.product);
+
+    return {
+      ref: freshInquiry.id,
+      createdAt: freshInquiry.submittedAt,
+      productId: "tracked-inquiry",
+      productName: getProductNameFromTrackedProduct(freshInquiry.product, method),
+      basePrice: 0,
+      method,
+      methodMoq: METHOD_MOQ[method],
+      color: "",
+      sizeRun: { ...EMPTY_SIZE_RUN },
+      totalPieces: parseTotalPiecesFromQuantity(freshInquiry.quantity),
+      canvaLink: "",
+      artworkName: "",
+      artworkSource: "send-later",
+      artworkStoragePath: "",
+      artworkUploadStatus: "not-needed",
+      artworkUploadedAt: "",
+      previousReference: "",
+      neededDate: "",
+      notes: "",
+      customerName: "",
+      customerContact: contact,
+      contact,
+      rightsConfirmed: false,
       status: normalizeStatus(freshInquiry.statusLabel),
       statusKey: freshInquiry.statusKey,
       statusLabel: freshInquiry.statusLabel || "STATUS ERROR",
@@ -583,6 +638,7 @@ export default function HomePage() {
         notes: notes.trim(),
         customerName: customerName.trim(),
         customerContact: customerContact.trim(),
+        contact: customerContact.trim(),
         rightsConfirmed,
         status: normalizeStatus(result.status),
         statusKey: normalizeStatus(result.status) === "FOR REVIEW" ? "new" : "submitted",
@@ -625,12 +681,15 @@ export default function HomePage() {
       const saved = getStoredInquiries();
       const existing = saved.find((item) => item.ref.toLowerCase() === freshInquiry.id.toLowerCase());
 
-      if (existing) {
-        const refreshedLocalInquiry = mergeServerInquiry(existing, freshInquiry);
-        const nextList = saved.map((item) => item.ref.toLowerCase() === refreshedLocalInquiry.ref.toLowerCase() ? refreshedLocalInquiry : item).slice(0, 20);
-        saveStoredInquiries(nextList);
-        setInquiries(nextList);
-      }
+      const refreshedLocalInquiry = existing
+        ? mergeServerInquiry(existing, freshInquiry)
+        : createInquiryFromTracked(freshInquiry, contact);
+      const nextList = existing
+        ? saved.map((item) => item.ref.toLowerCase() === refreshedLocalInquiry.ref.toLowerCase() ? refreshedLocalInquiry : item).slice(0, 20)
+        : [refreshedLocalInquiry, ...saved].slice(0, 20);
+
+      saveStoredInquiries(nextList);
+      setInquiries(nextList);
 
       setTrackedInquiry(freshInquiry);
       setTrackSearched(true);
@@ -804,7 +863,7 @@ export default function HomePage() {
           <dl>
             <div><dt>REF NO.</dt><dd>{current?.ref}<button className="copyMini" onClick={() => current?.ref && navigator.clipboard?.writeText(current.ref)} type="button">COPY</button></dd></div>
             <div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div>
-            <div><dt>TOTAL PIECES</dt><dd>{current?.totalPieces}</dd></div>
+            <div><dt>TOTAL PIECES</dt><dd>{current ? formatPieceCount(current.totalPieces) : ""}</dd></div>
             <div><dt>METHOD</dt><dd>{current?.method}</dd></div>
             <div><dt>STATUS</dt><dd><mark>{current?.statusLabel || "STATUS ERROR"}</mark></dd></div>
             <div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div>
@@ -838,9 +897,9 @@ export default function HomePage() {
           <button className="limeCta" disabled={isTracking} type="submit">{isTracking ? "TRACKING" : "TRACK INQUIRY"}</button>
         </form>
         {isSyncingInquiries ? <p className="syncStatus">UPDATING INQUIRIES...</p> : null}
-        {trackSearched ? trackedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{trackedInquiry.quantity}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
+        {trackSearched ? trackedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{normalizeQuantityDisplay(trackedInquiry.quantity)}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryList">
-          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {item.totalPieces} pcs</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><mark>{item.statusLabel || "STATUS ERROR"}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
+          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {formatPieceCount(item.totalPieces)}</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><mark>{item.statusLabel || "STATUS ERROR"}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
         </div>
         <BottomNav active="myInquiries" />
       </section>

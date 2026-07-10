@@ -26,6 +26,10 @@ function sizeRunSummary(value: unknown) {
   return entries.join(", ");
 }
 
+function pieceLabel(totalPieces: number) {
+  return String(totalPieces) + " " + (totalPieces === 1 ? "pc" : "pcs");
+}
+
 function generateReferenceCandidate() {
   return `TRRY-${Math.floor(1000 + Math.random() * 9000)}`;
 }
@@ -103,7 +107,7 @@ export async function POST(request: Request) {
   }
 
   const sizeSummary = sizeRunSummary(body.sizeRun);
-  const quantitySummary = sizeSummary ? `${totalPieces} pcs (${sizeSummary})` : `${totalPieces} ${totalPieces === 1 ? "pc" : "pcs"}`;
+  const quantitySummary = sizeSummary ? `${pieceLabel(totalPieces)} (${sizeSummary})` : pieceLabel(totalPieces);
   const createdAt = new Date().toISOString();
 
   try {
