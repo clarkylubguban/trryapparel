@@ -54,6 +54,12 @@ const PRODUCTS: Product[] = [
   { id: "towels", name: "Towels", description: "Premium giveaway or team towels.", basePrice: 200, icon: "TW", tags: ["Embroidery"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
 ];
 
+const METHOD_MOQ: Record<Method, { minimum: number; note: string }> = {
+  "DTF Transfer": { minimum: 1, note: "Minimum order: 1 piece for DTF transfer." },
+  Embroidery: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." },
+  "Screen Print": { minimum: 1, note: "Minimum order: 1 piece for screen print." },
+};
+
 const COLORS = [
   { name: "Black", value: "#111111" },
   { name: "White", value: "#fffdf8" },
@@ -114,6 +120,7 @@ export default function HomePage() {
   const [sizeRun, setSizeRun] = useState<SizeRun>(EMPTY_SIZE_RUN);
   const [canvaLink, setCanvaLink] = useState("");
   const [artworkName, setArtworkName] = useState("");
+  const [artworkLater, setArtworkLater] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
   const [uploadMessage, setUploadMessage] = useState("");
   const [previousReference, setPreviousReference] = useState("");
@@ -138,8 +145,12 @@ export default function HomePage() {
 
   const totalPieces = useMemo(() => activeProduct.availableSizes.reduce((sum, size) => sum + sizeRun[size], 0), [activeProduct.availableSizes, sizeRun]);
   const canvaValid = !canvaLink.trim() || /^https?:\/\/(www\.)?canva\.com\/.+/i.test(canvaLink.trim());
-  const moqMet = totalPieces >= activeProduct.moq.minimum;
-  const canSubmit = totalPieces > 0 && moqMet && canvaValid && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
+  const methodMoq = METHOD_MOQ[method];
+  const requiredMoq = Math.max(activeProduct.moq.minimum, methodMoq.minimum);
+  const moqNote = activeProduct.moq.minimum > methodMoq.minimum ? activeProduct.moq.note : methodMoq.note;
+  const moqMet = totalPieces >= requiredMoq;
+  const hasArtworkPlan = Boolean(artworkName || canvaLink.trim() || artworkLater);
+  const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
   const matchedInquiry = inquiries.find((item) => item.ref.toLowerCase() === trackRef.trim().toLowerCase() && cleanPhone(item.customerContact) === cleanPhone(trackContact));
 
   function resetFormForProduct(product: Product) {
@@ -151,6 +162,7 @@ export default function HomePage() {
     setArtworkName("");
     setUploadStatus("idle");
     setUploadMessage("");
+    setArtworkLater(false);
     setPreviousReference("");
     setNeededDate("");
     setNotes("");
@@ -190,8 +202,9 @@ export default function HomePage() {
     event.preventDefault();
     if (!canSubmit) {
       if (!totalPieces) setFormError("Add at least one size quantity before submitting.");
-      else if (!moqMet) setFormError(activeProduct.moq.note);
+      else if (!moqMet) setFormError(moqNote);
       else if (!canvaValid) setFormError("Canva link must be a valid canva.com link.");
+      else if (!hasArtworkPlan) setFormError("Upload artwork, paste a Canva link, or choose send artwork later.");
       else if (!customerName.trim() || !customerContact.trim()) setFormError("Name and contact are required near the end of the form.");
       else if (!rightsConfirmed) setFormError("Confirm that you own or are allowed to use the artwork.");
       return;
@@ -212,7 +225,7 @@ export default function HomePage() {
       sizeRun,
       totalPieces,
       canvaLink: canvaLink.trim(),
-      artworkName,
+      artworkName: artworkLater && !artworkName ? "Send artwork later" : artworkName,
       previousReference: previousReference.trim(),
       neededDate,
       notes: notes.trim(),
@@ -334,7 +347,7 @@ export default function HomePage() {
             <h2>SIZE RUN</h2>
             <div className="sizeRunTable">{activeProduct.availableSizes.map((size) => <div className="sizeRunRow" key={size}><strong>{size}</strong><button onClick={() => updateSize(size, -1)} type="button">-</button><span>{sizeRun[size]}</span><button onClick={() => updateSize(size, 1)} type="button">+</button></div>)}</div>
             <div className="totalPieces"><span>TOTAL PIECES</span><strong>{totalPieces}</strong></div>
-            <p className={moqMet || totalPieces === 0 ? "moqNote" : "moqNote error"}>{activeProduct.moq.note}</p>
+            <p className={moqMet || totalPieces === 0 ? "moqNote" : "moqNote error"}>{moqNote}</p>
           </section>
 
           <section className="formSection artworkSection">
@@ -343,6 +356,7 @@ export default function HomePage() {
             {uploadStatus === "ready" ? <p className="uploadState good">Artwork ready for review.</p> : null}
             {uploadStatus === "error" ? <p className="uploadState bad">{uploadMessage}</p> : null}
             <label className="stackedField"><span>CANVA LINK OPTIONAL</span><input aria-invalid={!canvaValid} placeholder="https://canva.com/design/..." value={canvaLink} onChange={(event) => setCanvaLink(event.target.value)} /></label>
+            <label className="rightsCheck"><input checked={artworkLater} onChange={(event) => setArtworkLater(event.target.checked)} type="checkbox" /> <span>I will send artwork after this inquiry.</span></label>
           </section>
 
           {method === "Embroidery" || activeProduct.referenceRequired ? (
