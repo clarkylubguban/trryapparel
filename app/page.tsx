@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 type Screen = "home" | "catalog" | "customize" | "submitted" | "myInquiries";
-type Method = "DTF Transfer" | "Embroidery" | "Screen Print";
+type Method = string;
 type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "2XL";
 type UploadStatus = "idle" | "ready" | "error";
 type ArtworkSource = "upload" | "canva" | "send-later";
@@ -17,15 +17,40 @@ type Product = {
   name: string;
   description: string;
   basePrice: number;
+  priceLabel?: string;
   icon: string;
   tags: Method[];
   availableSizes: SizeKey[];
+  availableColors: ColorOption[];
   moq: {
     minimum: number;
     note: string;
   };
   referenceRequired?: boolean;
   sizing: "sized" | "quantity-only";
+  imageUrl?: string;
+};
+
+type ColorOption = {
+  name: string;
+  value: string;
+};
+
+type CatalogProductRow = {
+  id: string;
+  name: string;
+  slug: string;
+  category: string | null;
+  description: string | null;
+  image_url: string | null;
+  starting_price: string | number | null;
+  price_label: string | null;
+  minimum_quantity: number | null;
+  available_sizes: unknown;
+  available_colors: unknown;
+  print_methods: unknown;
+  sort_order: number | null;
+  is_featured: boolean | null;
 };
 
 type Inquiry = {
@@ -84,23 +109,23 @@ type InquiryDraft = {
   rightsConfirmed: boolean;
 };
 
-const PRODUCTS: Product[] = [
-  { id: "premium-cotton-shirt", name: "Premium Cotton Shirt", description: "Soft daily shirt for prints and slogans.", basePrice: 280, icon: "TS", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
-  { id: "caps", name: "Caps", description: "Logo caps for crews and teams.", basePrice: 180, icon: "CP", tags: ["Embroidery"], availableSizes: [], sizing: "quantity-only", moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
-  { id: "boxy-crop-shirt", name: "Boxy Crop Shirt", description: "Boxy fit merch shirt.", basePrice: 300, icon: "BX", tags: ["DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
-  { id: "polo-uniform", name: "Polo Uniform", description: "Business polo with logo placement.", basePrice: 350, icon: "PL", tags: ["Embroidery", "DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], sizing: "sized", moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
-  { id: "tote-bag", name: "Tote Bag", description: "Reusable merch and event bag.", basePrice: 220, icon: "TB", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
-  { id: "towels", name: "Towels", description: "Premium giveaway or team towels.", basePrice: 200, icon: "TW", tags: ["Embroidery"], availableSizes: [], sizing: "quantity-only", moq: { minimum: 12, note: "Minimum order: 12 pieces for embroidery." }, referenceRequired: true },
+const FALLBACK_PRODUCTS: Product[] = [
+  { id: "premium-cotton-shirt", name: "Premium Cotton Shirt", description: "Soft daily shirt for prints and slogans.", basePrice: 280, icon: "PS", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], availableColors: [], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "caps", name: "Caps", description: "Logo caps for crews and teams.", basePrice: 180, icon: "CP", tags: ["Embroidery"], availableSizes: [], availableColors: [], sizing: "quantity-only", moq: { minimum: 12, note: "Minimum order: 12 pieces." }, referenceRequired: true },
+  { id: "boxy-crop-shirt", name: "Boxy Crop Shirt", description: "Boxy fit merch shirt.", basePrice: 300, icon: "BS", tags: ["DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], availableColors: [], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "polo-uniform", name: "Polo Uniform", description: "Business polo with logo placement.", basePrice: 350, icon: "PU", tags: ["Embroidery", "DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], availableColors: [], sizing: "sized", moq: { minimum: 12, note: "Minimum order: 12 pieces." }, referenceRequired: true },
+  { id: "tote-bag", name: "Tote Bag", description: "Reusable merch and event bag.", basePrice: 220, icon: "TB", tags: ["DTF Transfer", "Screen Print"], availableSizes: [], availableColors: [], sizing: "quantity-only", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "towels", name: "Towels", description: "Premium giveaway or team towels.", basePrice: 200, icon: "TW", tags: ["Embroidery"], availableSizes: [], availableColors: [], sizing: "quantity-only", moq: { minimum: 12, note: "Minimum order: 12 pieces." }, referenceRequired: true },
 ];
 
-const METHOD_MOQ: Record<Method, number> = {
+const METHOD_MOQ: Record<string, number> = {
   "DTF Transfer": 1,
   Embroidery: 1,
   "Screen Print": 30,
 };
 const TRACKED_METHODS = Object.keys(METHOD_MOQ) as Method[];
 
-const COLORS = [
+const COLORS: ColorOption[] = [
   { name: "Black", value: "#111111" },
   { name: "White", value: "#fffdf8" },
   { name: "Sand", value: "#dfd0b5" },
@@ -128,9 +153,88 @@ const DRAFT_SAVE_DELAY_MS = 500;
 
 const MESSENGER_LINK = "https://m.me/trryapparel";
 const TRACKER_STEPS = ["INQUIRY RECEIVED", "QUOTE AND REVIEW", "PROOF APPROVAL", "PRODUCTION", "PICKUP OR DELIVERY"];
+const ALLOW_CATALOG_FALLBACK = process.env.NODE_ENV === "development";
 
 function formatMoney(value: number) {
   return "\u20b1" + value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function getPriceDisplay(product: Product) {
+  const label = product.priceLabel?.trim();
+  if (label && !/^\d+(\.\d+)?$/.test(label)) return label;
+  return `From ${formatMoney(product.basePrice)}`;
+}
+
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("");
+  return initials || "TR";
+}
+
+function normalizeMethod(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  const key = normalized.toUpperCase().replace(/[_-]+/g, " ");
+
+  if (key === "DTF") return "DTF Transfer";
+  if (key === "EMBROIDERY") return "Embroidery";
+  if (key === "SCREEN PRINT" || key === "SCREENPRINT") return "Screen Print";
+  if (key === "DTF TRANSFER") return "DTF Transfer";
+
+  if (process.env.NODE_ENV === "development") {
+    console.warn(`Unknown catalog print method: ${value}`);
+  }
+
+  return normalized;
+}
+
+function toStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [];
+}
+
+function normalizeSizes(value: unknown) {
+  const supported = new Set<SizeKey>(SIZES);
+  return toStringArray(value)
+    .map((item) => item.toUpperCase())
+    .filter((item): item is SizeKey => supported.has(item as SizeKey));
+}
+
+function normalizeColors(value: unknown) {
+  const swatchByName = new Map(COLORS.map((item) => [item.name.toLowerCase(), item]));
+  return toStringArray(value)
+    .map((item) => swatchByName.get(item.toLowerCase()) || { name: item, value: item })
+    .filter((item) => item.name);
+}
+
+function normalizeCatalogProducts(rows: CatalogProductRow[]) {
+  return rows.flatMap((row): Product[] => {
+    const name = typeof row.name === "string" ? row.name.trim() : "";
+    const slug = typeof row.slug === "string" ? row.slug.trim() : "";
+    if (!name || !slug) return [];
+
+    const availableSizes = normalizeSizes(row.available_sizes);
+    const printMethods = toStringArray(row.print_methods).map(normalizeMethod);
+    const minimumQuantity = Math.max(1, Number(row.minimum_quantity) || 1);
+    const startingPrice = Number(row.starting_price);
+
+    return [{
+      id: slug,
+      name,
+      description: typeof row.description === "string" ? row.description : "",
+      basePrice: Number.isFinite(startingPrice) ? startingPrice : 0,
+      priceLabel: typeof row.price_label === "string" ? row.price_label : "",
+      icon: getInitials(name),
+      tags: printMethods.length ? printMethods : ["DTF Transfer"],
+      availableSizes,
+      availableColors: normalizeColors(row.available_colors),
+      moq: {
+        minimum: minimumQuantity,
+        note: `Minimum order: ${minimumQuantity} ${minimumQuantity === 1 ? "piece" : "pieces"}.`,
+      },
+      referenceRequired: printMethods.some((item) => item === "Embroidery"),
+      sizing: availableSizes.length ? "sized" : "quantity-only",
+      imageUrl: typeof row.image_url === "string" ? row.image_url.trim() : "",
+    }];
+  });
 }
 function makeRef(existing: Inquiry[] = []) {
   const usedRefs = new Set(existing.map((item) => item.ref.toLowerCase()));
@@ -361,23 +465,18 @@ function getStoredDraft(): InquiryDraft | null {
     }
 
     const updatedAt = Date.parse(parsed.updatedAt);
-    const product = PRODUCTS.find((item) => item.id === parsed.productId);
 
     if (
       !Number.isFinite(updatedAt) ||
-      Date.now() - updatedAt > DRAFT_EXPIRY_MS ||
-      !product
+      Date.now() - updatedAt > DRAFT_EXPIRY_MS
     ) {
       window.localStorage.removeItem(DRAFT_STORAGE_KEY);
       return null;
     }
 
-    const method: Method =
-      parsed.method === "Embroidery" ||
-      parsed.method === "Screen Print" ||
-      parsed.method === "DTF Transfer"
-        ? parsed.method
-        : product.tags[0];
+    const method: Method = typeof parsed.method === "string" && parsed.method.trim()
+      ? parsed.method
+      : "DTF Transfer";
 
     const draftSizeRun = { ...EMPTY_SIZE_RUN };
 
@@ -394,9 +493,9 @@ function getStoredDraft(): InquiryDraft | null {
     return {
       version: 1,
       updatedAt: parsed.updatedAt,
-      productId: product.id,
+      productId: parsed.productId,
       color: typeof parsed.color === "string" ? parsed.color : "Sand",
-      method: product.tags.includes(method) ? method : product.tags[0],
+      method,
       sizeRun: draftSizeRun,
       quantityOnly:
         typeof parsed.quantityOnly === "number" &&
@@ -434,9 +533,12 @@ function clearStoredDraft() {
 }
 export default function HomePage() {
   const [screen, setScreen] = useState<Screen>("home");
-  const [activeProduct, setActiveProduct] = useState<Product>(PRODUCTS[0]);
+  const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
+  const [catalogStatus, setCatalogStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [catalogError, setCatalogError] = useState("");
+  const [activeProduct, setActiveProduct] = useState<Product>(FALLBACK_PRODUCTS[0]);
   const [color, setColor] = useState("Sand");
-  const [method, setMethod] = useState<Method>(PRODUCTS[0].tags[0]);
+  const [method, setMethod] = useState<Method>(FALLBACK_PRODUCTS[0].tags[0]);
   const [sizeRun, setSizeRun] = useState<SizeRun>(EMPTY_SIZE_RUN);
   const [quantityOnly, setQuantityOnly] = useState(0);
   const [emptySizeInputs, setEmptySizeInputs] = useState<SizeKey[]>([]);
@@ -478,6 +580,44 @@ export default function HomePage() {
     setCustomerContact(window.localStorage.getItem("customerContact") || "");
     setStoredDraft(getStoredDraft());
   }, []);
+
+  async function loadCatalog() {
+    setCatalogStatus("loading");
+    setCatalogError("");
+
+    try {
+      const response = await fetch("/api/catalog", { cache: "no-store" });
+      const data = await response.json().catch(() => ({})) as { ok?: boolean; products?: CatalogProductRow[]; error?: string };
+
+      if (!response.ok || !data.ok || !Array.isArray(data.products)) {
+        throw new Error(data.error || "Catalog is unavailable right now.");
+      }
+
+      const normalizedProducts = normalizeCatalogProducts(data.products);
+      const draft = getStoredDraft();
+      const draftProductExists = draft ? normalizedProducts.some((item) => item.id === draft.productId) : false;
+
+      setProducts(normalizedProducts);
+      setCatalogStatus("ready");
+      setStoredDraft(draft && draftProductExists ? draft : null);
+      if (draft && !draftProductExists) clearStoredDraft();
+      setActiveProduct((current) => normalizedProducts.find((item) => item.id === current.id) || normalizedProducts[0] || current);
+    } catch (error) {
+      const fallbackProducts = ALLOW_CATALOG_FALLBACK ? FALLBACK_PRODUCTS : [];
+      const draft = getStoredDraft();
+      const draftProductExists = draft ? fallbackProducts.some((item) => item.id === draft.productId) : false;
+
+      setProducts(fallbackProducts);
+      setCatalogStatus("error");
+      setCatalogError(error instanceof Error ? error.message : "Catalog is unavailable right now.");
+      setStoredDraft(ALLOW_CATALOG_FALLBACK && draft && draftProductExists ? draft : null);
+    }
+  }
+
+  useEffect(() => {
+    void loadCatalog();
+  }, []);
+
 
   useEffect(() => {
     const previousScreen = previousScreenRef.current;
@@ -541,9 +681,10 @@ export default function HomePage() {
     rightsConfirmed,
   ]);
   const isQuantityOnlyProduct = activeProduct.sizing === "quantity-only";
+  const activeColors = activeProduct.availableColors.length ? activeProduct.availableColors : COLORS;
   const totalPieces = useMemo(() => isQuantityOnlyProduct ? quantityOnly : activeProduct.availableSizes.reduce((sum, size) => sum + sizeRun[size], 0), [activeProduct.availableSizes, isQuantityOnlyProduct, quantityOnly, sizeRun]);
   const canvaValid = !canvaLink.trim() || /^https?:\/\/(www\.)?canva\.com\/.+/i.test(canvaLink.trim());
-  const requiredMoq = METHOD_MOQ[method];
+  const requiredMoq = METHOD_MOQ[method] ?? activeProduct.moq.minimum;
   const remainingPieces = requiredMoq > totalPieces ? requiredMoq - totalPieces : 0;
   const moqNote = remainingPieces > 0
     ? `${method} requires at least ${requiredMoq} ${requiredMoq === 1 ? "piece" : "pieces"}. Add ${remainingPieces} more.`
@@ -555,10 +696,12 @@ export default function HomePage() {
   const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && !customerNameError && !customerContactError && rightsConfirmed && !isSubmitting;
   const submitButtonText = isSubmitting ? submitStage === "uploading" ? "UPLOADING ARTWORK" : "SUBMITTING" : "SUBMIT INQUIRY";
   const messengerLink = `${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I want to ask about inquiry ${submittedInquiry?.ref || trackRef || ""}.`)}`;
+  const draftProduct = storedDraft ? products.find((product) => product.id === storedDraft.productId) : null;
+  const showStoredDraft = Boolean(storedDraft && draftProduct);
 
   function resetFormForProduct(product: Product) {
     setActiveProduct(product);
-    setColor("Sand");
+    setColor((product.availableColors.length ? product.availableColors : COLORS)[0]?.name || "Sand");
     setMethod(product.tags[0]);
     setSizeRun(createSizeRunForProduct(product));
     setQuantityOnly(0);
@@ -588,7 +731,7 @@ function resumeStoredDraft() {
   const draft = storedDraft || getStoredDraft();
   if (!draft) return;
 
-  const product = PRODUCTS.find((item) => item.id === draft.productId);
+  const product = products.find((item) => item.id === draft.productId);
   if (!product) {
     clearStoredDraft();
     setStoredDraft(null);
@@ -1062,7 +1205,17 @@ setSubmittedInquiry(nextInquiry);
   }
 
   function ProductThumb({ product, large = false }: { product: Product; large?: boolean }) {
-    return <div className={large ? "productThumb large" : "productThumb"}><span>{product.icon}</span></div>;
+    const [imageFailed, setImageFailed] = useState(false);
+
+    useEffect(() => {
+      setImageFailed(false);
+    }, [product.imageUrl]);
+
+    return (
+      <div className={large ? "productThumb large" : "productThumb"}>
+        {product.imageUrl && !imageFailed ? <img src={product.imageUrl} alt="" onError={() => setImageFailed(true)} /> : <span>{product.icon}</span>}
+      </div>
+    );
   }
 
   function renderHome() {
@@ -1077,14 +1230,13 @@ setSubmittedInquiry(nextInquiry);
           <p>Browse the catalog. No sign-in needed.</p>
         </div>
 
-{storedDraft ? (
+{showStoredDraft ? (
   <div className="draftResumeCard">
     <div className="draftResumeCopy">
       <small>SAVED DRAFT</small>
       <strong>CONTINUE YOUR INQUIRY?</strong>
       <span>
-        {PRODUCTS.find((product) => product.id === storedDraft.productId)?.name ||
-          "Custom order"}
+        {draftProduct?.name || "Custom order"}
       </span>
     </div>
 
@@ -1131,17 +1283,22 @@ setSubmittedInquiry(nextInquiry);
           <h1 id="catalog-title">CHOOSE YOUR PRODUCT.</h1>
           <p>Pick an item to start your order.</p>
         </div>
-        <div className="catalogGrid">
-          {PRODUCTS.map((product) => (
-            <button className="productCard" key={product.id} onClick={() => openProduct(product)} type="button">
-              <ProductThumb product={product} />
-              <strong>{product.name}</strong>
-              <span className="methodTags">{product.tags.map((tag) => <small key={tag}>{tag.replace(" Transfer", "")}</small>)}</span>
-              <span className="priceLine">From {formatMoney(product.basePrice)}</span>
-              <span className="blackCta">CUSTOMIZE</span>
-            </button>
-          ))}
-        </div>
+        {catalogStatus === "loading" ? <p className="emptyState">Loading catalog...</p> : null}
+        {catalogStatus === "error" ? <div className="formError" role="alert"><p>{catalogError}{ALLOW_CATALOG_FALLBACK ? " Showing local catalog fallback." : ""}</p><button className="outlineCta" onClick={loadCatalog} type="button">RETRY</button></div> : null}
+        {catalogStatus === "ready" && !products.length ? <p className="emptyState">Catalog is being prepared.</p> : null}
+        {catalogStatus !== "loading" && products.length ? (
+          <div className="catalogGrid">
+            {products.map((product) => (
+              <button className="productCard" key={product.id} onClick={() => openProduct(product)} type="button">
+                <ProductThumb product={product} />
+                <strong>{product.name}</strong>
+                <span className="methodTags">{product.tags.map((tag) => <small key={tag}>{tag.replace(" Transfer", "")}</small>)}</span>
+                <span className="priceLine">{getPriceDisplay(product)}</span>
+                <span className="blackCta">CUSTOMIZE</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         <BottomNav active="catalog" />
       </section>
     );
@@ -1156,13 +1313,13 @@ setSubmittedInquiry(nextInquiry);
             <ProductThumb product={activeProduct} large />
             <div>
               <h1 id="customize-title">{activeProduct.name}</h1>
-              <p>From {formatMoney(activeProduct.basePrice)}</p>
+              <p>{getPriceDisplay(activeProduct)}</p>
             </div>
           </section>
 
           <section className="formSection">
             <h2>COLOR</h2>
-            <div className="swatches">{COLORS.map((item) => <button aria-label={item.name} className={color === item.name ? "selected" : ""} key={item.name} onClick={() => setColor(item.name)} style={{ background: item.value }} type="button" />)}</div>
+            <div className="swatches">{activeColors.map((item) => <button aria-label={item.name} className={color === item.name ? "selected" : ""} key={item.name} onClick={() => setColor(item.name)} style={{ background: item.value }} type="button" />)}</div>
           </section>
 
           <section className="formSection">

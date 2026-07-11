@@ -226,6 +226,7 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
   background: var(--paper);
 }
 .productThumb.large { min-height: 172px; }
+.productThumb img { width: 100%; height: 100%; object-fit: cover; }
 .productThumb span {
   display: grid;
   min-width: 50px;
