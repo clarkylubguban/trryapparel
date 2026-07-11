@@ -8,7 +8,7 @@ type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "2XL";
 type UploadStatus = "idle" | "ready" | "error";
 type ArtworkSource = "upload" | "canva" | "send-later";
 type ArtworkUploadStatus = "not-needed" | "uploaded" | "failed";
-type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "IN PRODUCTION" | "DELIVERED" | "STATUS UPDATE" | "STATUS ERROR";
+type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "PROOF APPROVAL" | "IN PRODUCTION" | "PICKUP OR DELIVERY" | "DELIVERED" | "INQUIRY CLOSED / LOST" | "STATUS UPDATE" | "STATUS ERROR";
 
 type SizeRun = Record<SizeKey, number>;
 
@@ -237,23 +237,51 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function normalizeTrackerStatus(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
 function normalizeStatus(value: unknown): InquiryStatus {
-  const status = String(value || "").trim().replace(/_/g, " ").toLowerCase();
-  if (status === "new" || status === "for review") return "FOR REVIEW";
-  if (status === "quote" || status === "needs quote") return "NEEDS QUOTE";
-  if (status === "in production" || status === "production") return "IN PRODUCTION";
-  if (status === "delivered" || status === "completed") return "DELIVERED";
+  const status = normalizeTrackerStatus(value);
+
+  if (["new", "inquiry received", "for review", "for_review"].includes(status)) return "FOR REVIEW";
+  if (["quote", "needs quote", "sent", "quote sent", "followup", "follow up"].includes(status)) return "NEEDS QUOTE";
+  if (["won", "odoo created", "approved", "proof approval", "proof approved"].includes(status)) return "PROOF APPROVAL";
+  if (["production", "in production"].includes(status)) return "IN PRODUCTION";
+  if (["ready", "ready for pickup", "pickup", "delivery", "pickup or delivery"].includes(status)) return "PICKUP OR DELIVERY";
+  if (["delivered", "completed"].includes(status)) return "DELIVERED";
+  if (["lost", "cancelled", "canceled", "inquiry closed / lost"].includes(status)) return "INQUIRY CLOSED / LOST";
   return "STATUS UPDATE";
 }
 
 function getInquiryProgress(statusKey: unknown) {
-  const status = String(statusKey || "").trim().replace(/_/g, " ").toLowerCase();
+  const status = normalizeTrackerStatus(statusKey);
 
-  if (status === "quote" || status === "needs quote") {
-    return { step: 2, label: "QUOTE AND REVIEW", progress: 40 };
+  if (["lost", "cancelled", "canceled"].includes(status)) {
+    return { step: 0, label: "INQUIRY CLOSED / LOST", progress: 0, closed: true };
   }
 
-  return { step: 1, label: "INQUIRY RECEIVED", progress: 20 };
+  if (["quote", "needs quote", "sent", "quote sent", "followup", "follow up"].includes(status)) {
+    return { step: 2, label: "QUOTE AND REVIEW", progress: 40, closed: false };
+  }
+
+  if (["won", "odoo created", "approved", "proof approval", "proof approved"].includes(status)) {
+    return { step: 3, label: "PROOF APPROVAL", progress: 60, closed: false };
+  }
+
+  if (["production", "in production"].includes(status)) {
+    return { step: 4, label: "PRODUCTION", progress: 80, closed: false };
+  }
+
+  if (["ready", "ready for pickup", "pickup", "delivery", "delivered", "completed"].includes(status)) {
+    return { step: 5, label: "PICKUP OR DELIVERY", progress: 100, closed: false };
+  }
+
+  return { step: 1, label: "INQUIRY RECEIVED", progress: 20, closed: false };
 }
 
 function getArtworkSource(item: Record<string, unknown>): ArtworkSource {
@@ -1229,6 +1257,8 @@ setSubmittedInquiry(nextInquiry);
 
   function TrackerCard({ statusKey }: { statusKey?: string }) {
     const progress = getInquiryProgress(statusKey);
+
+    if (progress.closed) return <div className="trackerCard closed"><h2>TRACK YOUR ORDER <span>CLOSED</span></h2><p className="active">{progress.label}</p><small>This inquiry is closed and is not in active production progress.</small></div>;
 
     return <div className="trackerCard"><h2>TRACK YOUR ORDER <span>STEP {progress.step}/5</span></h2><div className="bar"><span style={{ width: `${progress.progress}%` }} /></div>{TRACKER_STEPS.map((step, index) => <p className={index === progress.step - 1 ? "active" : ""} key={step}>{index + 1}. {step}</p>)}<small>No quote before review. No print without approval. Est. quote reply within 24 hrs.</small></div>;
   }

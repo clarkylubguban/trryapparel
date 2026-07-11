@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSupabaseAdminClient } from "../../../../lib/supabaseServer";
 
-type CustomerStatus = "FOR REVIEW" | "NEEDS QUOTE" | "IN PRODUCTION" | "DELIVERED" | "STATUS UPDATE" | "STATUS ERROR";
+type CustomerStatus = "FOR REVIEW" | "NEEDS QUOTE" | "PROOF APPROVAL" | "IN PRODUCTION" | "PICKUP OR DELIVERY" | "DELIVERED" | "INQUIRY CLOSED / LOST" | "STATUS UPDATE" | "STATUS ERROR";
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -13,16 +13,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function statusKey(value: unknown) {
-  return text(value).replace(/_/g, " ").toLowerCase() || "unknown";
+  return text(value).toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ") || "unknown";
 }
 
 function mapCustomerStatus(value: unknown): CustomerStatus {
   const status = statusKey(value);
 
-  if (status === "new" || status === "for review") return "FOR REVIEW";
-  if (status === "quote" || status === "needs quote") return "NEEDS QUOTE";
-  if (status === "in production" || status === "production") return "IN PRODUCTION";
-  if (status === "delivered" || status === "completed") return "DELIVERED";
+  if (["new", "inquiry received", "for review"].includes(status)) return "FOR REVIEW";
+  if (["quote", "needs quote", "sent", "quote sent", "followup", "follow up"].includes(status)) return "NEEDS QUOTE";
+  if (["won", "odoo created", "approved", "proof approval", "proof approved"].includes(status)) return "PROOF APPROVAL";
+  if (["production", "in production"].includes(status)) return "IN PRODUCTION";
+  if (["ready", "ready for pickup", "pickup", "delivery"].includes(status)) return "PICKUP OR DELIVERY";
+  if (["delivered", "completed"].includes(status)) return "DELIVERED";
+  if (["lost", "cancelled", "canceled"].includes(status)) return "INQUIRY CLOSED / LOST";
   return "STATUS UPDATE";
 }
 
