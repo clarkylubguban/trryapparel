@@ -173,6 +173,47 @@ function cleanPhone(value: string) {
   return value.trim().toLowerCase();
 }
 
+function normalizeContactText(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function validateCustomerName(value: string) {
+  return value.trim().length >= 2 ? "" : "Enter your full name with at least 2 characters.";
+}
+
+const unusableContactValues = new Set(["none", "n/a", "na", "test", "testing", "null", "nil"]);
+
+function validateCustomerContact(value: string) {
+  const trimmed = normalizeContactText(value);
+  const lowered = trimmed.toLowerCase();
+  const compactLowered = lowered.replace(/[\s._-]+/g, "");
+
+  if (!trimmed) return "Enter a phone number or Messenger contact.";
+  if (unusableContactValues.has(lowered) || unusableContactValues.has(compactLowered)) {
+    return "Enter a usable phone number or Messenger contact.";
+  }
+
+  const phoneNormalized = trimmed.replace(/[\s-]/g, "");
+  const validPhilippineMobile = /^(09\d{9}|\+639\d{9}|639\d{9})$/.test(phoneNormalized);
+  if (validPhilippineMobile) return "";
+
+  const hasLetters = /[a-z]/i.test(trimmed);
+  const phonePrefixAttempt = /^(09|\+?63)/.test(phoneNormalized);
+  const phoneLike = /^[+\d][\d\s-]*$/.test(trimmed) || phonePrefixAttempt;
+
+  if (phonePrefixAttempt && hasLetters) return "Phone numbers cannot include letters.";
+  if (phoneLike) return "Enter a valid Philippine mobile number or Messenger contact.";
+
+  const validProfileUrl = /^(https?:\/\/)?(www\.)?(facebook\.com|m\.me|messenger\.com)\/[a-z0-9._-]+\/?$/i.test(trimmed);
+  const messengerNote = /^messenger:\s*(?=.*[a-z0-9])[a-z0-9][a-z0-9 ._'-]{1,}$/i.test(trimmed);
+  const taggedUsername = /^@[a-z0-9](?:[a-z0-9._-]{1,28}[a-z0-9])?$/i.test(trimmed);
+  const separatedUsername = /^(?=.*[._])[a-z0-9](?:[a-z0-9._-]{1,28}[a-z0-9])$/i.test(trimmed);
+
+  if (validProfileUrl || messengerNote || taggedUsername || separatedUsername) return "";
+
+  return "Enter a valid PH mobile number, Messenger: contact, @username, profile link, or username with . or _.";
+}
+
 function getFileExtension(filename: string) {
   const match = filename.toLowerCase().match(/\.([a-z0-9]+)$/);
   return match ? match[1] : "";
@@ -383,6 +424,8 @@ export default function HomePage() {
   const [notes, setNotes] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerContact, setCustomerContact] = useState("");
+  const [customerNameTouched, setCustomerNameTouched] = useState(false);
+  const [customerContactTouched, setCustomerContactTouched] = useState(false);
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -479,7 +522,9 @@ export default function HomePage() {
     : `${method} minimum met.`;
   const moqMet = totalPieces >= requiredMoq;
   const hasArtworkPlan = Boolean(artworkName || canvaLink.trim() || artworkLater);
-  const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && Boolean(customerName.trim()) && Boolean(customerContact.trim()) && rightsConfirmed && !isSubmitting;
+  const customerNameError = validateCustomerName(customerName);
+  const customerContactError = validateCustomerContact(customerContact);
+  const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && !customerNameError && !customerContactError && rightsConfirmed && !isSubmitting;
   const submitButtonText = isSubmitting ? submitStage === "uploading" ? "UPLOADING ARTWORK" : "SUBMITTING" : "SUBMIT INQUIRY";
   const messengerLink = `${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I want to ask about inquiry ${submittedInquiry?.ref || trackRef || ""}.`)}`;
 
@@ -501,6 +546,8 @@ export default function HomePage() {
     setNeededDate("");
     setNotes("");
     setRightsConfirmed(false);
+    setCustomerNameTouched(false);
+    setCustomerContactTouched(false);
     setFormError("");
     setIsSubmitting(false);
     setSubmitStage("idle");
@@ -536,6 +583,8 @@ function resumeStoredDraft() {
   setNotes(draft.notes);
   setCustomerName(draft.customerName);
   setCustomerContact(draft.customerContact);
+  setCustomerNameTouched(false);
+  setCustomerContactTouched(false);
   setRightsConfirmed(draft.rightsConfirmed);
   setUploadStatus(draft.artworkName ? "error" : "idle");
   setUploadMessage(
@@ -799,7 +848,13 @@ setInquiries(nextList);
       else if (!moqMet) setFormError(moqNote);
       else if (!canvaValid) setFormError("Canva link must be a valid canva.com link.");
       else if (!hasArtworkPlan) setFormError("Upload artwork, paste a Canva link, or choose send artwork later.");
-      else if (!customerName.trim() || !customerContact.trim()) setFormError("Name and contact are required near the end of the form.");
+      else if (customerNameError) {
+        setCustomerNameTouched(true);
+        setFormError(customerNameError);
+      } else if (customerContactError) {
+        setCustomerContactTouched(true);
+        setFormError(customerContactError);
+      }
       else if (!rightsConfirmed) setFormError("Confirm that you own or are allowed to use the artwork.");
       return;
     }
@@ -1124,8 +1179,10 @@ setSubmittedInquiry(nextInquiry);
 
           <section className="formSection contactSection">
             <h2>CONTACT</h2>
-            <input placeholder="Your full name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
-            <input placeholder="Phone number or Messenger" value={customerContact} onChange={(event) => setCustomerContact(event.target.value)} />
+            <input aria-describedby="customer-name-error" aria-invalid={customerNameTouched && Boolean(customerNameError)} placeholder="Your full name" value={customerName} onBlur={() => { setCustomerNameTouched(true); setCustomerName(customerName.trim()); }} onChange={(event) => setCustomerName(event.target.value)} />
+            {customerNameTouched && customerNameError ? <p className="fieldError" id="customer-name-error" role="alert">{customerNameError}</p> : null}
+            <input aria-describedby="customer-contact-error" aria-invalid={customerContactTouched && Boolean(customerContactError)} placeholder="Phone number or Messenger" value={customerContact} onBlur={() => setCustomerContactTouched(true)} onChange={(event) => setCustomerContact(event.target.value)} />
+            {customerContactTouched && customerContactError ? <p className="fieldError" id="customer-contact-error" role="alert">{customerContactError}</p> : null}
             <p>We'll use this to send your quote and production updates.</p>
           </section>
 

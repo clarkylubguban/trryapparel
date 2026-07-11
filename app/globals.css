@@ -306,7 +306,7 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
 .quantityOnlyControl button:last-child { border-left: var(--line-thin); }
 .totalPieces { display: flex; justify-content: space-between; border-top: var(--line); padding-top: 8px; font-family: var(--mono); font-weight: 950; }
 .moqNote { border: 1px solid var(--pink); padding: 8px; color: var(--slate); font-family: var(--mono); font-size: 0.66rem; font-weight: 950; }
-.moqNote.error, .formError, .uploadState.bad, .notFound { border: 1px solid var(--pink); background: #fff0f6; padding: 9px; }
+.moqNote.error, .fieldError, .formError, .uploadState.bad, .notFound { border: 1px solid var(--pink); background: #fff0f6; padding: 9px; }
 .artworkSection, .pinkBox { border: 1px solid var(--pink); padding: 12px; }
 .uploadDrop {
   position: relative;
@@ -321,6 +321,7 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
 .uploadDrop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .uploadDrop strong { font-size: 0.82rem; }
 .uploadDrop small, .uploadState, .moqNote, .pinkBox p, .contactSection p { color: var(--slate); font-size: 0.68rem; font-weight: 850; }
+.contactSection .fieldError { color: var(--ink); font-family: var(--mono); font-weight: 950; }
 .uploadState.good { border: var(--line-thin); background: transparent; padding: 9px; }
 .stackedField { display: grid; gap: 7px; }
 input, textarea {
