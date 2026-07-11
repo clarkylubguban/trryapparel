@@ -370,6 +370,8 @@ export default function HomePage() {
   const [method, setMethod] = useState<Method>(PRODUCTS[0].tags[0]);
   const [sizeRun, setSizeRun] = useState<SizeRun>(EMPTY_SIZE_RUN);
   const [quantityOnly, setQuantityOnly] = useState(0);
+  const [emptySizeInputs, setEmptySizeInputs] = useState<SizeKey[]>([]);
+  const [quantityOnlyInputEmpty, setQuantityOnlyInputEmpty] = useState(false);
   const [canvaLink, setCanvaLink] = useState("");
   const [artworkName, setArtworkName] = useState("");
   const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
@@ -487,6 +489,8 @@ export default function HomePage() {
     setMethod(product.tags[0]);
     setSizeRun(createSizeRunForProduct(product));
     setQuantityOnly(0);
+    setEmptySizeInputs([]);
+    setQuantityOnlyInputEmpty(false);
     setCanvaLink("");
     setArtworkName("");
     setSelectedArtworkFile(null);
@@ -521,6 +525,8 @@ function resumeStoredDraft() {
   setMethod(draft.method);
   setSizeRun(draft.sizeRun);
   setQuantityOnly(draft.quantityOnly);
+  setEmptySizeInputs([]);
+  setQuantityOnlyInputEmpty(false);
   setCanvaLink(draft.canvaLink);
   setArtworkName(draft.artworkName);
   setSelectedArtworkFile(null);
@@ -553,10 +559,42 @@ function discardStoredDraft() {
 
   function updateSize(size: SizeKey, delta: number) {
     setSizeRun((current) => ({ ...current, [size]: Math.max(0, current[size] + delta) }));
+    setEmptySizeInputs((current) => current.filter((item) => item !== size));
+  }
+
+  function updateSizeInput(size: SizeKey, value: string) {
+    if (value === "") {
+      setSizeRun((current) => ({ ...current, [size]: 0 }));
+      setEmptySizeInputs((current) => current.includes(size) ? current : [...current, size]);
+      return;
+    }
+
+    if (!/^\d+$/.test(value)) return;
+
+    setSizeRun((current) => ({ ...current, [size]: Number(value) }));
+    setEmptySizeInputs((current) => current.filter((item) => item !== size));
+  }
+
+  function resolveSizeInput(size: SizeKey) {
+    setEmptySizeInputs((current) => current.filter((item) => item !== size));
   }
 
   function updateQuantityOnly(delta: number) {
     setQuantityOnly((current) => Math.max(0, current + delta));
+    setQuantityOnlyInputEmpty(false);
+  }
+
+  function updateQuantityOnlyInput(value: string) {
+    if (value === "") {
+      setQuantityOnly(0);
+      setQuantityOnlyInputEmpty(true);
+      return;
+    }
+
+    if (!/^\d+$/.test(value)) return;
+
+    setQuantityOnly(Number(value));
+    setQuantityOnlyInputEmpty(false);
   }
   function mergeServerInquiry(oldItem: Inquiry, freshInquiry: TrackedInquiry): Inquiry {
     return {
@@ -1051,7 +1089,7 @@ setSubmittedInquiry(nextInquiry);
 
           <section className="formSection">
             <h2>{isQuantityOnlyProduct ? "QUANTITY" : "SIZE RUN"}</h2>
-            {isQuantityOnlyProduct ? <div className="quantityOnlyControl"><button onClick={() => updateQuantityOnly(-1)} type="button">-</button><strong>{quantityOnly}</strong><button onClick={() => updateQuantityOnly(1)} type="button">+</button></div> : <div className="sizeRunTable">{activeProduct.availableSizes.map((size) => <div className="sizeRunRow" key={size}><strong>{size}</strong><button onClick={() => updateSize(size, -1)} type="button">-</button><span>{sizeRun[size]}</span><button onClick={() => updateSize(size, 1)} type="button">+</button></div>)}</div>}
+            {isQuantityOnlyProduct ? <div className="quantityOnlyControl"><button onClick={() => updateQuantityOnly(-1)} type="button">-</button><input aria-label="Quantity" inputMode="numeric" min="0" onBlur={() => setQuantityOnlyInputEmpty(false)} onChange={(event) => updateQuantityOnlyInput(event.target.value)} pattern="[0-9]*" step="1" type="number" value={quantityOnlyInputEmpty ? "" : quantityOnly} /><button onClick={() => updateQuantityOnly(1)} type="button">+</button></div> : <div className="sizeRunTable">{activeProduct.availableSizes.map((size) => <div className="sizeRunRow" key={size}><strong>{size}</strong><button onClick={() => updateSize(size, -1)} type="button">-</button><input aria-label={`${size} quantity`} inputMode="numeric" min="0" onBlur={() => resolveSizeInput(size)} onChange={(event) => updateSizeInput(size, event.target.value)} pattern="[0-9]*" step="1" type="number" value={emptySizeInputs.includes(size) ? "" : sizeRun[size]} /><button onClick={() => updateSize(size, 1)} type="button">+</button></div>)}</div>}
             <div className="totalPieces"><span>TOTAL PIECES</span><strong>{totalPieces}</strong></div>
             <p className={moqMet || totalPieces === 0 ? "moqNote" : "moqNote error"}>{moqNote}</p>
           </section>

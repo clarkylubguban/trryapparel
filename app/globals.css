@@ -273,7 +273,7 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
   border: var(--line-thin);
 }
 .sizeRunRow strong { padding-left: 10px; font-family: var(--mono); font-size: 0.78rem; }
-.sizeRunRow button, .sizeRunRow span {
+.sizeRunRow button, .sizeRunRow input {
   display: grid;
   min-height: 36px;
   place-items: center;
@@ -284,12 +284,14 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
   font-family: var(--mono);
   font-weight: 950;
 }
+.sizeRunRow input { width: 100%; -moz-appearance: textfield; text-align: center; }
+.sizeRunRow input::-webkit-outer-spin-button, .sizeRunRow input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
 .quantityOnlyControl {
   display: grid;
   grid-template-columns: 44px 1fr 44px;
   border: var(--line-thin);
 }
-.quantityOnlyControl button, .quantityOnlyControl strong {
+.quantityOnlyControl button, .quantityOnlyControl input {
   display: grid;
   min-height: 44px;
   place-items: center;
@@ -298,6 +300,8 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
   font-family: var(--mono);
   font-weight: 950;
 }
+.quantityOnlyControl input { width: 100%; -moz-appearance: textfield; text-align: center; }
+.quantityOnlyControl input::-webkit-outer-spin-button, .quantityOnlyControl input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
 .quantityOnlyControl button:first-child { border-right: var(--line-thin); }
 .quantityOnlyControl button:last-child { border-left: var(--line-thin); }
 .totalPieces { display: flex; justify-content: space-between; border-top: var(--line); padding-top: 8px; font-family: var(--mono); font-weight: 950; }
