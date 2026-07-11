@@ -10,6 +10,7 @@
     "lint": "oxlint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.2",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest"

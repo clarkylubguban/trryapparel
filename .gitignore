@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+.env*
+!.env.example
+
+# Next.js generated files
+.next/
+.codex-dev-server.pid
+.next/
