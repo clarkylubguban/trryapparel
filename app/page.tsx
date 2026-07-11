@@ -61,9 +61,27 @@ type TrackedInquiry = {
   product: string;
   quantity: string;
   submittedAt: string;
-  artworkLabel: string;
+  artworkLabel: string
   statusKey: string;
   statusLabel: InquiryStatus;
+};
+type InquiryDraft = {
+  version: 1;
+  updatedAt: string;
+  productId: string;
+  color: string;
+  method: Method;
+  sizeRun: SizeRun;
+  quantityOnly: number;
+  canvaLink: string;
+  artworkName: string;
+  artworkLater: boolean;
+  previousReference: string;
+  neededDate: string;
+  notes: string;
+  customerName: string;
+  customerContact: string;
+  rightsConfirmed: boolean;
 };
 
 const PRODUCTS: Product[] = [
@@ -104,13 +122,16 @@ function createSizeRunForProduct(product: Product): SizeRun {
   return nextSizeRun;
 }
 const STORAGE_KEY = "trry_inquiries_v3";
+const DRAFT_STORAGE_KEY = "trry_customize_draft_v1";
+const DRAFT_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+const DRAFT_SAVE_DELAY_MS = 500;
+
 const MESSENGER_LINK = "https://m.me/trryapparel";
 const TRACKER_STEPS = ["INQUIRY RECEIVED", "QUOTE AND REVIEW", "PROOF APPROVAL", "PRODUCTION", "PICKUP OR DELIVERY"];
 
 function formatMoney(value: number) {
   return "\u20b1" + value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
 function makeRef(existing: Inquiry[] = []) {
   const usedRefs = new Set(existing.map((item) => item.ref.toLowerCase()));
   let candidate = "";
@@ -253,7 +274,95 @@ function getStoredInquiries(): Inquiry[] {
 function saveStoredInquiries(items: Inquiry[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
+function getStoredDraft(): InquiryDraft | null {
+  if (typeof window === "undefined") return null;
 
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(DRAFT_STORAGE_KEY) || "null"
+    );
+
+    if (
+      !isRecord(parsed) ||
+      parsed.version !== 1 ||
+      typeof parsed.updatedAt !== "string" ||
+      typeof parsed.productId !== "string"
+    ) {
+      return null;
+    }
+
+    const updatedAt = Date.parse(parsed.updatedAt);
+    const product = PRODUCTS.find((item) => item.id === parsed.productId);
+
+    if (
+      !Number.isFinite(updatedAt) ||
+      Date.now() - updatedAt > DRAFT_EXPIRY_MS ||
+      !product
+    ) {
+      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      return null;
+    }
+
+    const method: Method =
+      parsed.method === "Embroidery" ||
+      parsed.method === "Screen Print" ||
+      parsed.method === "DTF Transfer"
+        ? parsed.method
+        : product.tags[0];
+
+    const draftSizeRun = { ...EMPTY_SIZE_RUN };
+
+    if (isRecord(parsed.sizeRun)) {
+      SIZES.forEach((size) => {
+        const value = parsed.sizeRun[size];
+        draftSizeRun[size] =
+          typeof value === "number" && Number.isFinite(value)
+            ? Math.max(0, Math.floor(value))
+            : 0;
+      });
+    }
+
+    return {
+      version: 1,
+      updatedAt: parsed.updatedAt,
+      productId: product.id,
+      color: typeof parsed.color === "string" ? parsed.color : "Sand",
+      method: product.tags.includes(method) ? method : product.tags[0],
+      sizeRun: draftSizeRun,
+      quantityOnly:
+        typeof parsed.quantityOnly === "number" &&
+        Number.isFinite(parsed.quantityOnly)
+          ? Math.max(0, Math.floor(parsed.quantityOnly))
+          : 0,
+      canvaLink:
+        typeof parsed.canvaLink === "string" ? parsed.canvaLink : "",
+      artworkName:
+        typeof parsed.artworkName === "string" ? parsed.artworkName : "",
+      artworkLater: parsed.artworkLater === true,
+      previousReference:
+        typeof parsed.previousReference === "string"
+          ? parsed.previousReference
+          : "",
+      neededDate:
+        typeof parsed.neededDate === "string" ? parsed.neededDate : "",
+      notes: typeof parsed.notes === "string" ? parsed.notes : "",
+      customerName:
+        typeof parsed.customerName === "string" ? parsed.customerName : "",
+      customerContact:
+        typeof parsed.customerContact === "string"
+          ? parsed.customerContact
+          : "",
+      rightsConfirmed: parsed.rightsConfirmed === true,
+    };
+  } catch {
+    window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+    return null;
+  }
+}
+
+function clearStoredDraft() {
+  window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+}
 export default function HomePage() {
   const [screen, setScreen] = useState<Screen>("home");
   const [activeProduct, setActiveProduct] = useState<Product>(PRODUCTS[0]);
@@ -285,6 +394,8 @@ export default function HomePage() {
   const [trackedInquiry, setTrackedInquiry] = useState<TrackedInquiry | null>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [isSyncingInquiries, setIsSyncingInquiries] = useState(false);
+  const [storedDraft, setStoredDraft] = useState<InquiryDraft | null>(null);
+
   const previousScreenRef = useRef<Screen>("home");
   const syncInquiriesInProgressRef = useRef(false);
 
@@ -292,7 +403,9 @@ export default function HomePage() {
     setInquiries(getStoredInquiries());
     setCustomerName(window.localStorage.getItem("customerName") || "");
     setCustomerContact(window.localStorage.getItem("customerContact") || "");
+    setStoredDraft(getStoredDraft());
   }, []);
+
   useEffect(() => {
     const previousScreen = previousScreenRef.current;
     previousScreenRef.current = screen;
@@ -302,6 +415,58 @@ export default function HomePage() {
     }
   }, [screen]);
 
+  useEffect(() => {
+    if (screen !== "customize" || isSubmitting) return;
+
+    const draft: InquiryDraft = {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      productId: activeProduct.id,
+      color,
+      method,
+      sizeRun,
+      quantityOnly,
+      canvaLink,
+      artworkName,
+      artworkLater,
+      previousReference,
+      neededDate,
+      notes,
+      customerName,
+      customerContact,
+      rightsConfirmed,
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      window.localStorage.setItem(
+        DRAFT_STORAGE_KEY,
+        JSON.stringify(draft)
+      );
+
+      setStoredDraft(draft);
+    }, DRAFT_SAVE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    screen,
+    isSubmitting,
+    activeProduct.id,
+    color,
+    method,
+    sizeRun,
+    quantityOnly,
+    canvaLink,
+    artworkName,
+    artworkLater,
+    previousReference,
+    neededDate,
+    notes,
+    customerName,
+    customerContact,
+    rightsConfirmed,
+  ]);
   const isQuantityOnlyProduct = activeProduct.sizing === "quantity-only";
   const totalPieces = useMemo(() => isQuantityOnlyProduct ? quantityOnly : activeProduct.availableSizes.reduce((sum, size) => sum + sizeRun[size], 0), [activeProduct.availableSizes, isQuantityOnlyProduct, quantityOnly, sizeRun]);
   const canvaValid = !canvaLink.trim() || /^https?:\/\/(www\.)?canva\.com\/.+/i.test(canvaLink.trim());
@@ -335,11 +500,51 @@ export default function HomePage() {
     setFormError("");
     setIsSubmitting(false);
     setSubmitStage("idle");
+    }
+function openCatalog() {
+  setScreen("catalog");
+}
+
+function resumeStoredDraft() {
+  const draft = storedDraft || getStoredDraft();
+  if (!draft) return;
+
+  const product = PRODUCTS.find((item) => item.id === draft.productId);
+  if (!product) {
+    clearStoredDraft();
+    setStoredDraft(null);
+    return;
   }
 
-  function openCatalog() {
-    setScreen("catalog");
-  }
+  setActiveProduct(product);
+  setColor(draft.color);
+  setMethod(draft.method);
+  setSizeRun(draft.sizeRun);
+  setQuantityOnly(draft.quantityOnly);
+  setCanvaLink(draft.canvaLink);
+  setArtworkName(draft.artworkName);
+  setSelectedArtworkFile(null);
+  setArtworkLater(draft.artworkLater);
+  setPreviousReference(draft.previousReference);
+  setNeededDate(draft.neededDate);
+  setNotes(draft.notes);
+  setCustomerName(draft.customerName);
+  setCustomerContact(draft.customerContact);
+  setRightsConfirmed(draft.rightsConfirmed);
+  setUploadStatus(draft.artworkName ? "error" : "idle");
+  setUploadMessage(
+    draft.artworkName
+      ? `Reselect ${draft.artworkName} before submitting.`
+      : ""
+  );
+  setFormError("");
+  setScreen("customize");
+}
+
+function discardStoredDraft() {
+  clearStoredDraft();
+  setStoredDraft(null);
+}
 
   function openProduct(product: Product) {
     resetFormForProduct(product);
@@ -516,8 +721,10 @@ export default function HomePage() {
 
   function saveInquiryUpdate(updatedInquiry: Inquiry) {
     const nextList = [updatedInquiry, ...getStoredInquiries().filter((item) => item.ref !== updatedInquiry.ref)].slice(0, 20);
-    saveStoredInquiries(nextList);
-    setInquiries(nextList);
+
+saveStoredInquiries(nextList);
+setInquiries(nextList);
+
     setSubmittedInquiry(updatedInquiry);
   }
 
@@ -657,9 +864,11 @@ export default function HomePage() {
       };
 
       const nextList = [nextInquiry, ...savedInquiries].slice(0, 20);
-      saveStoredInquiries(nextList);
-      setInquiries(nextList);
-      setSubmittedInquiry(nextInquiry);
+saveStoredInquiries(nextList);
+clearStoredDraft();
+setStoredDraft(null);
+setInquiries(nextList);
+setSubmittedInquiry(nextInquiry);
       setTrackRef(nextInquiry.ref);
       setTrackContact(nextInquiry.customerContact);
       setFormError(uploadFailureMessage ? `Inquiry received, but ${uploadFailureMessage}` : "");
@@ -746,7 +955,39 @@ export default function HomePage() {
           <h1 id="home-title">CUSTOM APPAREL.<br />MADE SIMPLE.</h1>
           <p>Browse the catalog. No sign-in needed.</p>
         </div>
-        <div className="homeChoices" aria-label="TRRY order categories">
+
+{storedDraft ? (
+  <div className="draftResumeCard">
+    <div className="draftResumeCopy">
+      <small>SAVED DRAFT</small>
+      <strong>CONTINUE YOUR INQUIRY?</strong>
+      <span>
+        {PRODUCTS.find((product) => product.id === storedDraft.productId)?.name ||
+          "Custom order"}
+      </span>
+    </div>
+
+    <div className="draftResumeActions">
+      <button
+        className="blackButton"
+        onClick={resumeStoredDraft}
+        type="button"
+      >
+        CONTINUE
+      </button>
+
+      <button
+        className="plainLink"
+        onClick={discardStoredDraft}
+        type="button"
+      >
+        DISCARD
+      </button>
+    </div>
+  </div>
+) : null}
+
+<div className="homeChoices" aria-label="TRRY order categories">
           {["CUSTOM T-SHIRTS", "EMBROIDERY / CAPS", "UNIFORMS / BUSINESS ORDER"].map((label, index) => (
             <button className="choiceCard" key={label} onClick={openCatalog} type="button">
               <span className="choiceIcon">{index === 1 ? "CP" : index === 2 ? "UN" : "TS"}</span>

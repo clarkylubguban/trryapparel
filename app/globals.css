@@ -101,6 +101,45 @@ p { font-size: 0.9rem; font-weight: 750; line-height: 1.35; }
 .homeHero { display: grid; gap: 10px; margin-top: 12px; }
 .homeHero h1 { max-width: 11ch; font-size: clamp(1.85rem, 9vw, 2.35rem); }
 .homeHero p { max-width: 31ch; }
+.draftResumeCard {
+  display: grid;
+  gap: 12px;
+  border: var(--line);
+  background: var(--paper);
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+
+.draftResumeCopy {
+  display: grid;
+  gap: 4px;
+}
+
+.draftResumeCopy small {
+  font-size: 0.62rem;
+  font-weight: 950;
+}
+
+.draftResumeCopy strong {
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.draftResumeCopy span {
+  font-size: 0.78rem;
+}
+
+.draftResumeActions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.draftResumeActions .blackButton {
+  min-height: 42px;
+  padding: 9px 12px;
+}
 .homeChoices { display: grid; gap: 10px; }
 .choiceCard {
   display: grid;
