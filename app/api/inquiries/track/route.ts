@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const supabase = getSupabaseAdminClient();
     const initialLookup = await supabase
       .from("ops_inquiries")
-      .select("id, contact, product, quantity, status, created_at, fulfillment_method, delivery_city, delivery_address, delivery_landmark")
+      .select("id, contact, product, quantity, status, created_at, fulfillment_method, delivery_city, delivery_address, delivery_landmark, tracking_substatus, tracking_note, tracking_updated_at")
       .eq("id", inquiryNumber)
       .eq("contact", contact)
       .maybeSingle();
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     let data: Record<string, unknown> | null = initialLookup.data;
     let error = initialLookup.error;
 
-    if (error && /fulfillment_method|delivery_city|delivery_address|delivery_landmark|schema cache|could not find/i.test(error.message || "")) {
+    if (error && /fulfillment_method|delivery_city|delivery_address|delivery_landmark|tracking_substatus|tracking_note|tracking_updated_at|schema cache|could not find/i.test(error.message || "")) {
       const fallback = await supabase
         .from("ops_inquiries")
         .select("id, contact, product, quantity, status, created_at")
@@ -91,10 +91,20 @@ export async function POST(request: Request) {
         artworkLabel: "Artwork details saved with inquiry",
         statusKey: key,
         statusLabel: mapCustomerStatus(key),
+        fulfillment_method: text(data.fulfillment_method),
+        delivery_city: text(data.delivery_city),
+        delivery_address: text(data.delivery_address),
+        delivery_landmark: text(data.delivery_landmark),
         fulfillmentMethod: text(data.fulfillment_method),
         deliveryCity: text(data.delivery_city),
         deliveryAddress: text(data.delivery_address),
         deliveryLandmark: text(data.delivery_landmark),
+        tracking_substatus: text(data.tracking_substatus),
+        tracking_note: text(data.tracking_note),
+        tracking_updated_at: text(data.tracking_updated_at),
+        trackingSubstatus: text(data.tracking_substatus),
+        trackingNote: text(data.tracking_note),
+        trackingUpdatedAt: text(data.tracking_updated_at),
       },
     });
   } catch (error) {

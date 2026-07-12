@@ -9,6 +9,7 @@ type UploadStatus = "idle" | "ready" | "error";
 type ArtworkSource = "upload" | "canva" | "send-later";
 type ArtworkUploadStatus = "not-needed" | "uploaded" | "failed";
 type FulfillmentMethod = "pickup" | "delivery";
+type TrackingSubstatus = "ready_for_pickup" | "out_for_delivery" | "delivered" | "completed";
 type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "PROOF APPROVAL" | "IN PRODUCTION" | "PICKUP OR DELIVERY" | "DELIVERED" | "INQUIRY CLOSED / LOST" | "STATUS UPDATE" | "STATUS ERROR";
 
 type SizeRun = Record<SizeKey, number>;
@@ -80,6 +81,9 @@ type Inquiry = {
   deliveryCity: string;
   deliveryAddress: string;
   deliveryLandmark: string;
+  trackingSubstatus: TrackingSubstatus | "";
+  trackingNote: string;
+  trackingUpdatedAt: string;
   notes: string;
   customerName: string;
   customerContact: string;
@@ -101,6 +105,9 @@ type TrackedInquiry = {
   deliveryCity?: string;
   deliveryAddress?: string;
   deliveryLandmark?: string;
+  trackingSubstatus?: TrackingSubstatus | "";
+  trackingNote?: string;
+  trackingUpdatedAt?: string;
 };
 type InquiryDraft = {
   version: 1;
@@ -409,6 +416,29 @@ function getDeliverySummary(city: string, address: string, landmark: string) {
   return parts.join(" / ");
 }
 
+function getTrackingSubstatus(value: unknown): TrackingSubstatus | "" {
+  return value === "ready_for_pickup" || value === "out_for_delivery" || value === "delivered" || value === "completed" ? value : "";
+}
+
+function getTrackingSubstatusDetail(substatus: TrackingSubstatus | "", fulfillmentMethod: FulfillmentMethod | "") {
+  if (substatus === "ready_for_pickup" && fulfillmentMethod === "pickup") {
+    return { title: "READY FOR PICKUP", message: "Your order is ready for pickup at TRRY Apparel, Iligan City." };
+  }
+  if (substatus === "out_for_delivery" && fulfillmentMethod === "delivery") {
+    return { title: "OUT FOR DELIVERY", message: "Your order has been released for delivery." };
+  }
+  if (substatus === "delivered" && fulfillmentMethod === "delivery") {
+    return { title: "DELIVERED", message: "Your order has been delivered successfully." };
+  }
+  if (substatus === "completed") {
+    return { title: "COMPLETED", message: "Your order has been completed." };
+  }
+  return null;
+}
+
+function getTrackingSubstatusLabel(substatus: TrackingSubstatus | "", fulfillmentMethod: FulfillmentMethod | "") {
+  return getTrackingSubstatusDetail(substatus, fulfillmentMethod)?.title || "";
+}
 function getArtworkUploadStatus(item: Record<string, unknown>, source: ArtworkSource): ArtworkUploadStatus {
   if (item.artworkUploadStatus === "uploaded" || item.artworkUploadStatus === "failed" || item.artworkUploadStatus === "not-needed") return item.artworkUploadStatus;
   if (source !== "upload") return "not-needed";
@@ -532,6 +562,9 @@ function getStoredInquiries(): Inquiry[] {
         deliveryCity: typeof item.deliveryCity === "string" ? item.deliveryCity : "",
         deliveryAddress: typeof item.deliveryAddress === "string" ? item.deliveryAddress : "",
         deliveryLandmark: typeof item.deliveryLandmark === "string" ? item.deliveryLandmark : "",
+        trackingSubstatus: getTrackingSubstatus(item.trackingSubstatus),
+        trackingNote: typeof item.trackingNote === "string" ? item.trackingNote : "",
+        trackingUpdatedAt: typeof item.trackingUpdatedAt === "string" ? item.trackingUpdatedAt : "",
         notes: typeof item.notes === "string" ? item.notes : "",
         customerName: typeof item.customerName === "string" ? item.customerName : "",
         customerContact: typeof item.customerContact === "string" ? item.customerContact : typeof item.contact === "string" ? item.contact : "",
@@ -970,6 +1003,9 @@ function openCatalog() {
       deliveryCity: freshInquiry.deliveryCity || oldItem.deliveryCity,
       deliveryAddress: freshInquiry.deliveryAddress || oldItem.deliveryAddress,
       deliveryLandmark: freshInquiry.deliveryLandmark || oldItem.deliveryLandmark,
+      trackingSubstatus: getTrackingSubstatus(freshInquiry.trackingSubstatus) || oldItem.trackingSubstatus,
+      trackingNote: freshInquiry.trackingNote || oldItem.trackingNote,
+      trackingUpdatedAt: freshInquiry.trackingUpdatedAt || oldItem.trackingUpdatedAt,
     };
   }
 
@@ -1007,6 +1043,9 @@ function openCatalog() {
       deliveryCity: freshInquiry.deliveryCity || "",
       deliveryAddress: freshInquiry.deliveryAddress || "",
       deliveryLandmark: freshInquiry.deliveryLandmark || "",
+      trackingSubstatus: getTrackingSubstatus(freshInquiry.trackingSubstatus),
+      trackingNote: freshInquiry.trackingNote || "",
+      trackingUpdatedAt: freshInquiry.trackingUpdatedAt || "",
     };
   }
 
@@ -1219,6 +1258,9 @@ setInquiries(nextList);
           deliveryCity: deliveryCity.trim(),
           deliveryAddress: deliveryAddress.trim(),
           deliveryLandmark: deliveryLandmark.trim(),
+        trackingSubstatus: "",
+        trackingNote: "",
+        trackingUpdatedAt: "",
           notes: notes.trim(),
           customerName: customerName.trim(),
           customerContact: customerContact.trim(),
@@ -1280,6 +1322,9 @@ setInquiries(nextList);
           deliveryCity: deliveryCity.trim(),
           deliveryAddress: deliveryAddress.trim(),
           deliveryLandmark: deliveryLandmark.trim(),
+        trackingSubstatus: "",
+        trackingNote: "",
+        trackingUpdatedAt: "",
         notes: notes.trim(),
         customerName: customerName.trim(),
         customerContact: customerContact.trim(),
@@ -1683,7 +1728,23 @@ setSubmittedInquiry(nextInquiry);
         ) : null}
       </section>
     );
-  }  function renderSubmitted() {
+  }
+  function TrackingSubstatusPanel({ statusKey, fulfillmentMethod, trackingSubstatus, trackingNote, trackingUpdatedAt }: { statusKey?: string; fulfillmentMethod?: FulfillmentMethod | ""; trackingSubstatus?: TrackingSubstatus | ""; trackingNote?: string; trackingUpdatedAt?: string }) {
+    const progress = getInquiryProgress(statusKey);
+    const detail = getTrackingSubstatusDetail(getTrackingSubstatus(trackingSubstatus), fulfillmentMethod || "");
+    if (progress.step !== 5 || !detail) return null;
+
+    return (
+      <div className="trackingSubstatusPanel">
+        <span>STEP 5 UPDATE</span>
+        <strong>{detail.title}</strong>
+        <p>{detail.message}</p>
+        {trackingNote ? <p>{trackingNote}</p> : null}
+        {trackingUpdatedAt ? <small>Updated {formatCustomerDate(trackingUpdatedAt)}</small> : null}
+      </div>
+    );
+  }
+  function renderSubmitted() {
     const current = submittedInquiry;
     return (
       <section className="screen submittedScreen withNav" aria-labelledby="submitted-title">
@@ -1692,20 +1753,20 @@ setSubmittedInquiry(nextInquiry);
         <div className="receiptBox"><h2>TRRY INQUIRY RECEIPT</h2><dl><div><dt>REF NO.</dt><dd>{current?.ref}<button className="copyMini" onClick={() => current?.ref && navigator.clipboard?.writeText(current.ref)} type="button">COPY</button></dd></div><div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div><div><dt>QUANTITY</dt><dd>{current ? formatPieceCount(current.totalPieces) : ""}</dd></div><div><dt>METHOD</dt><dd>{current?.method}</dd></div><div><dt>STATUS</dt><dd><mark>{current?.statusLabel || "STATUS ERROR"}</mark></dd></div><div><dt>FULFILLMENT</dt><dd>{getFulfillmentLabel(current?.fulfillmentMethod || "")}</dd></div>{current?.fulfillmentMethod === "delivery" ? <div><dt>DELIVERY ADDRESS</dt><dd>{getDeliverySummary(current.deliveryCity, current.deliveryAddress, current.deliveryLandmark) || "Address pending"}</dd></div> : null}<div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div></dl><p>No quote before review. No print without approval.</p></div>
         {formError ? <p className="formError" role="alert">{formError}</p> : null}
         {current?.artworkSource === "upload" && current.artworkUploadStatus === "failed" ? <button className="outlineCta" disabled={retryingArtwork} onClick={retryArtworkUpload} type="button">{retryingArtwork ? "UPLOADING ARTWORK" : "RETRY ARTWORK UPLOAD"}</button> : null}
-        <TrackerCard statusKey={current?.statusKey} />
+        <TrackerCard statusKey={current?.statusKey} fulfillmentMethod={current?.fulfillmentMethod} trackingSubstatus={current?.trackingSubstatus} trackingNote={current?.trackingNote} trackingUpdatedAt={current?.trackingUpdatedAt} />
         <a className="blackButton" href={messengerLink} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a>
         <button className="outlineCta" onClick={() => setScreen("myInquiries")} type="button">VIEW ALL INQUIRIES</button>
         <BottomNav active="myInquiries" />
       </section>
     );
   }
-  function TrackerCard({ statusKey }: { statusKey?: string }) {
+  function TrackerCard({ statusKey, fulfillmentMethod, trackingSubstatus, trackingNote, trackingUpdatedAt }: { statusKey?: string; fulfillmentMethod?: FulfillmentMethod | ""; trackingSubstatus?: TrackingSubstatus | ""; trackingNote?: string; trackingUpdatedAt?: string }) {
     const progress = getInquiryProgress(statusKey);
     const context = getTrackerContext(statusKey);
 
     if (progress.closed) return <div className="trackerCard closed"><h2>TRACK YOUR INQUIRY <span>CLOSED</span></h2><p className="active">{progress.label}</p><small>{context}</small></div>;
 
-    return <div className="trackerCard"><h2>TRACK YOUR INQUIRY <span>STEP {progress.step}/5</span></h2><div className="bar"><span style={{ width: `${progress.progress}%` }} /></div>{TRACKER_STEPS.map((step, index) => <p className={index === progress.step - 1 ? "active" : index < progress.step - 1 ? "done" : ""} key={step}>{index + 1}. {step}</p>)}<small>{context}</small></div>;
+    return <div className="trackerCard"><h2>TRACK YOUR INQUIRY <span>STEP {progress.step}/5</span></h2><div className="bar"><span style={{ width: `${progress.progress}%` }} /></div>{TRACKER_STEPS.map((step, index) => <p className={index === progress.step - 1 ? "active" : index < progress.step - 1 ? "done" : ""} key={step}>{index + 1}. {step}</p>)}<small>{context}</small><TrackingSubstatusPanel statusKey={statusKey} fulfillmentMethod={fulfillmentMethod} trackingSubstatus={trackingSubstatus} trackingNote={trackingNote} trackingUpdatedAt={trackingUpdatedAt} /></div>;
   }
 
   function renderMyInquiries() {
@@ -1720,9 +1781,9 @@ setSubmittedInquiry(nextInquiry);
           <button className="limeCta" disabled={isTracking} type="submit">{isTracking ? "TRACKING" : "TRACK INQUIRY"}</button>
         </form>
         {isSyncingInquiries ? <p className="syncStatus">UPDATING INQUIRIES...</p> : null}
-        {trackSearched ? trackedInquiry ? <div className="receiptBox foundInquiry"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{normalizeQuantityDisplay(trackedInquiry.quantity)}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>FULFILLMENT</dt><dd>{getFulfillmentLabel(trackedInquiry.fulfillmentMethod || "")}</dd></div>{trackedInquiry.fulfillmentMethod === "delivery" ? <div><dt>DELIVERY ADDRESS</dt><dd>{getDeliverySummary(trackedInquiry.deliveryCity || "", trackedInquiry.deliveryAddress || "", trackedInquiry.deliveryLandmark || "") || "Address pending"}</dd></div> : null}<div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>Saved to My Inquiries for future status refresh.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
+        {trackSearched ? trackedInquiry ? <div className="receiptBox foundInquiry"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{normalizeQuantityDisplay(trackedInquiry.quantity)}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>FULFILLMENT</dt><dd>{getFulfillmentLabel(trackedInquiry.fulfillmentMethod || "")}</dd></div>{trackedInquiry.fulfillmentMethod === "delivery" ? <div><dt>DELIVERY ADDRESS</dt><dd>{getDeliverySummary(trackedInquiry.deliveryCity || "", trackedInquiry.deliveryAddress || "", trackedInquiry.deliveryLandmark || "") || "Address pending"}</dd></div> : null}<div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><TrackingSubstatusPanel statusKey={trackedInquiry.statusKey} fulfillmentMethod={trackedInquiry.fulfillmentMethod} trackingSubstatus={trackedInquiry.trackingSubstatus} trackingNote={trackedInquiry.trackingNote} trackingUpdatedAt={trackedInquiry.trackingUpdatedAt} /><p>Saved to My Inquiries for future status refresh.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryListHeader"><h2>SAVED INQUIRIES</h2></div>
-        <div className="inquiryList">{inquiries.length ? inquiries.map((item) => { const nextAction = getNextActionLabel(item.statusKey); return <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><span className="inquiryTop"><strong>{item.productName}</strong><mark>{item.statusLabel || "STATUS ERROR"}</mark></span><span>{item.ref} / {formatPieceCount(item.totalPieces)}</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><small>{getFulfillmentLabel(item.fulfillmentMethod)}{item.fulfillmentMethod === "delivery" ? ` / ${getDeliverySummary(item.deliveryCity, item.deliveryAddress, item.deliveryLandmark)}` : ""}</small><small>NEXT: {nextAction}</small><b>VIEW DETAILS</b></button>; }) : <p className="emptyState">No saved inquiries yet. Browse the catalog to start one, or use the tracking form above.</p>}</div>
+        <div className="inquiryList">{inquiries.length ? inquiries.map((item) => { const nextAction = getNextActionLabel(item.statusKey); return <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><span className="inquiryTop"><strong>{item.productName}</strong><mark>{item.statusLabel || "STATUS ERROR"}</mark></span><span>{item.ref} / {formatPieceCount(item.totalPieces)}</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><small>{getFulfillmentLabel(item.fulfillmentMethod)}{item.fulfillmentMethod === "delivery" ? ` / ${getDeliverySummary(item.deliveryCity, item.deliveryAddress, item.deliveryLandmark)}` : ""}</small>{getTrackingSubstatusLabel(item.trackingSubstatus, item.fulfillmentMethod) ? <small>{getTrackingSubstatusLabel(item.trackingSubstatus, item.fulfillmentMethod)}</small> : null}<TrackingSubstatusPanel statusKey={item.statusKey} fulfillmentMethod={item.fulfillmentMethod} trackingSubstatus={item.trackingSubstatus} trackingNote={item.trackingNote} trackingUpdatedAt={item.trackingUpdatedAt} /><small>NEXT: {nextAction}</small><b>VIEW DETAILS</b></button>; }) : <p className="emptyState">No saved inquiries yet. Browse the catalog to start one, or use the tracking form above.</p>}</div>
         <BottomNav active="myInquiries" />
       </section>
     );
