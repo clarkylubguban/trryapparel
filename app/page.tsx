@@ -12,6 +12,9 @@ type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "PROOF APPROVAL" | "IN PRODU
 
 type SizeRun = Record<SizeKey, number>;
 
+type DatePickerBlank = { key: string };
+type DatePickerDay = { key: string; date: Date; day: number; isPast: boolean; isToday: boolean; isSelected: boolean };
+type DatePickerCell = DatePickerBlank | DatePickerDay;
 type Product = {
   id: string;
   name: string;
@@ -177,6 +180,33 @@ function formatCustomerDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(date);
+}
+
+function toDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day, 12);
+}
+
+function formatRequestedDate(value: string) {
+  const date = parseDateKey(value);
+  if (!date) return "Select requested date";
+  return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(date);
+}
+
+function addCalendarMonths(date: Date, amount: number) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1, 12);
+}
+
+function isDatePickerDay(item: DatePickerCell): item is DatePickerDay {
+  return "day" in item;
 }
 
 function getPriceDisplay(product: Product) {
@@ -593,6 +623,8 @@ export default function HomePage() {
   const [uploadMessage, setUploadMessage] = useState("");
   const [previousReference, setPreviousReference] = useState("");
   const [neededDate, setNeededDate] = useState("");
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [datePickerMonth, setDatePickerMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12));
   const [notes, setNotes] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerContact, setCustomerContact] = useState("");
@@ -776,6 +808,20 @@ export default function HomePage() {
   const selectedArtworkStatus = artworkName ? "FILE ATTACHED" : canvaLink.trim() ? "CANVA LINK" : artworkLater ? "SEND LATER" : "NOT SET";
   const attachedArtworkMeta = selectedArtworkFile ? (selectedArtworkFile.type || getFileExtension(selectedArtworkFile.name).toUpperCase()) + " / " + Math.max(1, Math.round(selectedArtworkFile.size / 1024)) + " KB" : "Ready for review";
   const reviewContact = customerName.trim() || customerContact.trim() ? (customerName.trim() || "Name needed") + " / " + (customerContact.trim() || "Contact needed") : "Contact needed";
+  const todayKey = toDateKey(new Date());
+  const selectedDateLabel = formatRequestedDate(neededDate);
+  const datePickerMonthLabel = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(datePickerMonth);
+  const datePickerDays = useMemo(() => {
+    const start = new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth(), 1, 12);
+    const daysInMonth = new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() + 1, 0).getDate();
+    const blanks: DatePickerBlank[] = Array.from({ length: start.getDay() }, (_, index) => ({ key: `blank-${index}` }));
+    const days: DatePickerDay[] = Array.from({ length: daysInMonth }, (_, index) => {
+      const date = new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth(), index + 1, 12);
+      const key = toDateKey(date);
+      return { key, date, day: index + 1, isPast: key < todayKey, isToday: key === todayKey, isSelected: key === neededDate };
+    });
+    return [...blanks, ...days];
+  }, [datePickerMonth, neededDate, todayKey]);
 
   function resetFormForProduct(product: Product) {
     setActiveProduct(product);
@@ -794,6 +840,7 @@ export default function HomePage() {
     setArtworkLater(false);
     setPreviousReference("");
     setNeededDate("");
+    setDatePickerOpen(false);
     setNotes("");
     setRightsConfirmed(false);
     setCustomerNameTouched(false);
@@ -1444,7 +1491,10 @@ setSubmittedInquiry(nextInquiry);
 
           <section className="formSection fulfillmentSection">
             <SectionHeading number="05" title="FULFILLMENT" helper="TRRY will confirm pickup or delivery details after review." />
-            <input value={neededDate} onChange={(event) => setNeededDate(event.target.value)} type="date" />
+            <button className={neededDate ? "dateTrigger hasDate" : "dateTrigger"} onClick={() => { const selected = parseDateKey(neededDate); setDatePickerMonth(selected ? new Date(selected.getFullYear(), selected.getMonth(), 1, 12) : new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12)); setDatePickerOpen(true); }} type="button" aria-haspopup="dialog" aria-expanded={datePickerOpen}>
+              <span>REQUESTED DATE</span>
+              <strong>{selectedDateLabel}</strong>
+            </button>
             {method === "Embroidery" ? (
               <div className="pinkBox inline">
                 <h2>PREVIOUS EMBROIDERY REFERENCE</h2>
@@ -1493,10 +1543,42 @@ setSubmittedInquiry(nextInquiry);
           </label>
           {formError ? <p className="formError" role="alert">{formError}</p> : null}
           <div className="stickySubmit">
-            <span><strong>{activeProduct.name}</strong><small>{formatPieceCount(totalPieces)} / {method}</small></span>
+            <div className="submitTotalRow">
+              <span>TOTAL</span>
+              <strong>{totalPieces} PCS</strong>
+            </div>
             <button className="limeCta" disabled={!canSubmit} type="submit">{submitButtonText}</button>
           </div>
         </form>
+        {datePickerOpen ? (
+          <div className="dateSheetOverlay" onClick={() => setDatePickerOpen(false)} role="presentation">
+            <section aria-label="Select requested date" aria-modal="true" className="dateSheet" onClick={(event) => event.stopPropagation()} role="dialog">
+              <div className="dateSheetHeader">
+                <span>SELECT DATE</span>
+                <button aria-label="Close date picker" onClick={() => setDatePickerOpen(false)} type="button">CLOSE</button>
+              </div>
+              <div className="dateMonthNav">
+                <button aria-label="Previous month" onClick={() => setDatePickerMonth((current) => addCalendarMonths(current, -1))} type="button">PREV</button>
+                <strong>{datePickerMonthLabel}</strong>
+                <button aria-label="Next month" onClick={() => setDatePickerMonth((current) => addCalendarMonths(current, 1))} type="button">NEXT</button>
+              </div>
+              <div className="dateWeekdays" aria-hidden="true">
+                {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day) => <span key={day}>{day}</span>)}
+              </div>
+              <div className="dateGrid">
+                {datePickerDays.map((item) => isDatePickerDay(item) ? (
+                  <button aria-label={`${item.isSelected ? 'Selected date, ' : ''}${item.date.toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric' })}`} className={[item.isSelected ? 'selected' : '', item.isToday ? 'today' : ''].filter(Boolean).join(' ')} disabled={item.isPast} key={item.key} onClick={() => setNeededDate(item.key)} type="button">
+                    {item.day}
+                  </button>
+                ) : <span aria-hidden="true" key={item.key} />)}
+              </div>
+              <div className="dateSheetActions">
+                <button className="outlineCta" onClick={() => setNeededDate("")} type="button">RESET</button>
+                <button className="limeCta" onClick={() => setDatePickerOpen(false)} type="button">CONFIRM DATE</button>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </section>
     );
   }  function renderSubmitted() {
