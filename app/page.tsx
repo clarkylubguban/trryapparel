@@ -739,6 +739,19 @@ export default function HomePage() {
   ]);
   const isQuantityOnlyProduct = activeProduct.sizing === "quantity-only";
   const activeColors = activeProduct.availableColors.length ? activeProduct.availableColors : COLORS;
+  const headerColorChoices = useMemo(() => {
+    const findColor = (name: string) => activeColors.find((item) => item.name.toLowerCase() === name.toLowerCase());
+    const white = findColor("White") || { name: "White", value: "#fffdf8" };
+    const black = findColor("Black") || { name: "Black", value: "#111111" };
+    const suggested = activeColors.find((item) => !["white", "black"].includes(item.name.toLowerCase())) || { name: "Suggested Color", value: "#dfd0b5" };
+
+    return [
+      { key: "white", label: "White", colorName: white.name, value: white.value },
+      { key: "black", label: "Black", colorName: black.name, value: black.value },
+      { key: "other", label: "Other", colorName: suggested.name, value: suggested.value },
+    ];
+  }, [activeColors]);
+  const selectedColorLabel = color === "White" || color === "Black" ? color : `Suggested: ${color}`;
   const sortedProductSizes = useMemo(() => sortCatalogSizes(activeProduct.availableSizes), [activeProduct.availableSizes]);
   const defaultSizeKeys = useMemo(() => sortedProductSizes.filter((size) => DEFAULT_VISIBLE_SIZES.has(size)), [sortedProductSizes]);
   const extraSizeKeys = useMemo(() => sortedProductSizes.filter((size) => !DEFAULT_VISIBLE_SIZES.has(size)), [sortedProductSizes]);
@@ -759,7 +772,6 @@ export default function HomePage() {
   const submitButtonText = isSubmitting ? (submitStage === "uploading" ? "UPLOADING ARTWORK" : "SUBMITTING") : "SUBMIT INQUIRY";
   const messengerLink = MESSENGER_LINK + "?text=" + encodeURIComponent("Hi TRRY, I want to ask about inquiry " + (submittedInquiry?.ref || trackRef || "") + ".");
   const catalogCountLabel = `${products.length} ${products.length === 1 ? "product" : "products"}`;
-  const activeMethodSummary = activeProduct.tags.length ? activeProduct.tags.map((tag) => tag.replace(" Transfer", "")).join(" / ") : "Review with TRRY";
   const selectedArtworkSummary = artworkName ? "Upload: " + artworkName : canvaLink.trim() ? "Canva link" : artworkLater ? "Send later" : "Not set";
   const selectedArtworkStatus = artworkName ? "FILE ATTACHED" : canvaLink.trim() ? "CANVA LINK" : artworkLater ? "SEND LATER" : "NOT SET";
   const attachedArtworkMeta = selectedArtworkFile ? (selectedArtworkFile.type || getFileExtension(selectedArtworkFile.name).toUpperCase()) + " / " + Math.max(1, Math.round(selectedArtworkFile.size / 1024)) + " KB" : "Ready for review";
@@ -1258,7 +1270,7 @@ setSubmittedInquiry(nextInquiry);
           <strong className="approvedBrand">TRRY<span>*</span></strong>
           <div className="approvedMeta" aria-hidden="true">
             <span><b suppressHydrationWarning>{manilaTime}</b> ILIGAN CITY</span>
-            <span>EST 2013 Ãƒâ€šÃ‚Â· SHIPS NATIONWIDE</span>
+            <span>EST 2013</span>
           </div>
         </header>
         <div className="approvedDivider" aria-hidden="true" />
@@ -1314,12 +1326,23 @@ setSubmittedInquiry(nextInquiry);
         <form className="customizeForm" onSubmit={submitInquiry} noValidate>
           <section className="selectedProduct">
             <ProductThumb product={activeProduct} large />
-            <div>
-              <span>SELECTED PRODUCT</span>
+            <div className="selectedProductDetails">
               <h1 id="customize-title">{activeProduct.name}</h1>
               {activeProduct.description ? <p>{activeProduct.description}</p> : null}
               <strong>{getPriceDisplay(activeProduct)}</strong>
-              <small>{activeProduct.moq.note} / {activeMethodSummary}</small>
+              <small>{activeProduct.moq.note}</small>
+              <div className="productColorPicker" aria-label="Garment color">
+                <span>COLOR</span>
+                <div className="productColorSwatches">
+                  {headerColorChoices.map((item) => (
+                    <span className="productColorOption" key={item.key}>
+                      <button aria-label={`Select ${item.label} color`} className={color === item.colorName ? "selected" : ""} onClick={() => setColor(item.colorName)} style={{ background: item.value }} type="button" />
+                      <small>{item.label}</small>
+                    </span>
+                  ))}
+                </div>
+                <b>{selectedColorLabel}</b>
+              </div>
             </div>
           </section>
 
@@ -1338,14 +1361,6 @@ setSubmittedInquiry(nextInquiry);
             </div>
           </section>
 
-          <section className="formSection colorSection">
-            <SectionHeading number="02" title="COLOR" helper="Pick the closest garment color for quote review." meta={color} />
-            <div className="swatches">
-              {activeColors.map((item) => (
-                <button aria-label={item.name} className={color === item.name ? "selected" : ""} key={item.name} onClick={() => setColor(item.name)} style={{ background: item.value }} type="button" />
-              ))}
-            </div>
-          </section>
 
           <section className="formSection quantitySection">
             <SectionHeading number="03" title={isQuantityOnlyProduct ? "QUANTITY" : "SIZE & QUANTITY"} helper={isQuantityOnlyProduct ? "Set total pieces for this product." : "Enter pieces per size. Total updates live."} meta={formatPieceCount(totalPieces)} />
