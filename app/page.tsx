@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 type Screen = "home" | "catalog" | "customize" | "submitted" | "myInquiries";
 type Method = string;
-type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "2XL";
+type SizeKey = string;
 type UploadStatus = "idle" | "ready" | "error";
 type ArtworkSource = "upload" | "canva" | "send-later";
 type ArtworkUploadStatus = "not-needed" | "uploaded" | "failed";
@@ -134,13 +134,27 @@ const COLORS: ColorOption[] = [
   { name: "Navy", value: "#0c1d39" },
 ];
 
-const SIZES: SizeKey[] = ["XS", "S", "M", "L", "XL", "2XL"];
-const EMPTY_SIZE_RUN: SizeRun = { XS: 0, S: 0, M: 0, L: 0, XL: 0, "2XL": 0 };
+const SIZE_ORDER: SizeKey[] = ["XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL", "4XL", "5XL"];
+const DEFAULT_VISIBLE_SIZES = new Set<SizeKey>(["S", "M", "L", "XL"]);
+const EMPTY_SIZE_RUN: SizeRun = {};
 const ARTWORK_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf", "svg", "ai", "eps", "psd"]);
 const MAX_ARTWORK_SIZE = 15 * 1024 * 1024;
 
+function sortCatalogSizes(sizes: SizeKey[]) {
+  return [...sizes].sort((left, right) => {
+    const leftIndex = SIZE_ORDER.indexOf(left);
+    const rightIndex = SIZE_ORDER.indexOf(right);
+
+    if (leftIndex >= 0 && rightIndex >= 0) return leftIndex - rightIndex;
+    if (leftIndex >= 0) return -1;
+    if (rightIndex >= 0) return 1;
+
+    return sizes.indexOf(left) - sizes.indexOf(right);
+  });
+}
+
 function createSizeRunForProduct(product: Product): SizeRun {
-  const nextSizeRun = { ...EMPTY_SIZE_RUN };
+  const nextSizeRun: SizeRun = {};
   product.availableSizes.forEach((size) => {
     nextSizeRun[size] = 0;
   });
@@ -159,10 +173,16 @@ function formatMoney(value: number) {
   return "\u20b1" + value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function formatCustomerDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(date);
+}
+
 function getPriceDisplay(product: Product) {
   const label = product.priceLabel?.trim();
   if (label && !/^\d+(\.\d+)?$/.test(label)) return label;
-  return `From ${formatMoney(product.basePrice)}`;
+  return `STARTS AT ${formatMoney(product.basePrice)}`;
 }
 
 function getInitials(name: string) {
@@ -192,10 +212,16 @@ function toStringArray(value: unknown) {
 }
 
 function normalizeSizes(value: unknown) {
-  const supported = new Set<SizeKey>(SIZES);
-  return toStringArray(value)
+  const seen = new Set<string>();
+  const sizes = toStringArray(value)
     .map((item) => item.toUpperCase())
-    .filter((item): item is SizeKey => supported.has(item as SizeKey));
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+
+  return sortCatalogSizes(sizes);
 }
 
 function normalizeColors(value: unknown) {
@@ -245,11 +271,6 @@ function makeRef(existing: Inquiry[] = []) {
   return candidate;
 }
 
-function formatCustomerDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(date);
-}
 function parseTotalPiecesFromQuantity(value: string) {
   const match = value.match(/\d+/);
   return match ? Number(match[0]) : 0;
@@ -271,7 +292,6 @@ function getProductNameFromTrackedProduct(product: string, method: Method) {
   const suffix = ` - ${method}`;
   return product.toLowerCase().endsWith(suffix.toLowerCase()) ? product.slice(0, -suffix.length).trim() : product;
 }
-
 
 function cleanPhone(value: string) {
   return value.trim().toLowerCase();
@@ -388,6 +408,27 @@ function getInquiryProgress(statusKey: unknown) {
   return { step: 1, label: "INQUIRY RECEIVED", progress: 20, closed: false };
 }
 
+function getTrackerContext(statusKey: unknown) {
+  const progress = getInquiryProgress(statusKey);
+  if (progress.closed) return "This inquiry is closed. Message TRRY with your reference if you need help.";
+  if (progress.step === 2) return "TRRY is preparing or reviewing your quotation.";
+  if (progress.step === 3) return "Your order has moved to proof preparation and approval.";
+  if (progress.step === 4) return "Your approved order is in production.";
+  if (progress.step === 5) return "Your inquiry is ready for pickup, delivery, or completion follow-up.";
+  return "TRRY is checking your request details.";
+}
+
+function getNextActionLabel(statusKey: unknown) {
+  const status = normalizeTrackerStatus(statusKey);
+
+  if (["lost", "cancelled", "canceled"].includes(status)) return "INQUIRY CLOSED";
+  if (["ready", "ready for pickup", "pickup", "delivery", "delivered", "completed"].includes(status)) return "PICKUP OR DELIVERY";
+  if (["production", "in production"].includes(status)) return "PRODUCTION IN PROGRESS";
+  if (["won", "odoo created", "approved", "proof approval", "proof approved"].includes(status)) return "PROOF PREPARATION AND APPROVAL";
+  if (["sent", "quote sent", "followup", "follow up"].includes(status)) return "REVIEW OR REPLY TO YOUR QUOTE";
+  if (["quote", "needs quote"].includes(status)) return "TRRY PREPARES YOUR QUOTE";
+  return "TRRY REVIEWS YOUR DETAILS";
+}
 function getArtworkSource(item: Record<string, unknown>): ArtworkSource {
   if (item.artworkSource === "upload" || item.artworkSource === "canva" || item.artworkSource === "send-later") return item.artworkSource;
   if (typeof item.canvaLink === "string" && item.canvaLink.trim()) return "canva";
@@ -481,9 +522,9 @@ function getStoredDraft(): InquiryDraft | null {
     const draftSizeRun = { ...EMPTY_SIZE_RUN };
 
     if (isRecord(parsed.sizeRun)) {
-      SIZES.forEach((size) => {
-        const value = parsed.sizeRun[size];
-        draftSizeRun[size] =
+      Object.entries(parsed.sizeRun).forEach(([size, value]) => {
+        if (!size) return;
+        draftSizeRun[size.toUpperCase()] =
           typeof value === "number" && Number.isFinite(value)
             ? Math.max(0, Math.floor(value))
             : 0;
@@ -540,6 +581,7 @@ export default function HomePage() {
   const [color, setColor] = useState("Sand");
   const [method, setMethod] = useState<Method>(FALLBACK_PRODUCTS[0].tags[0]);
   const [sizeRun, setSizeRun] = useState<SizeRun>(EMPTY_SIZE_RUN);
+  const [sizeExtrasOpen, setSizeExtrasOpen] = useState(false);
   const [quantityOnly, setQuantityOnly] = useState(0);
   const [emptySizeInputs, setEmptySizeInputs] = useState<SizeKey[]>([]);
   const [quantityOnlyInputEmpty, setQuantityOnlyInputEmpty] = useState(false);
@@ -569,7 +611,8 @@ export default function HomePage() {
   const [trackedInquiry, setTrackedInquiry] = useState<TrackedInquiry | null>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [isSyncingInquiries, setIsSyncingInquiries] = useState(false);
-  const [storedDraft, setStoredDraft] = useState<InquiryDraft | null>(null);
+  const [, setStoredDraft] = useState<InquiryDraft | null>(null);
+  const [manilaTime, setManilaTime] = useState("--:--:--");
 
   const previousScreenRef = useRef<Screen>("home");
   const syncInquiriesInProgressRef = useRef(false);
@@ -580,7 +623,21 @@ export default function HomePage() {
     setCustomerContact(window.localStorage.getItem("customerContact") || "");
     setStoredDraft(getStoredDraft());
   }, []);
+  useEffect(() => {
+    const formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Manila",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    const updateClock = () => setManilaTime(formatter.format(new Date()));
 
+    updateClock();
+    const timer = window.setInterval(updateClock, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
   async function loadCatalog() {
     setCatalogStatus("loading");
     setCatalogError("");
@@ -682,28 +739,38 @@ export default function HomePage() {
   ]);
   const isQuantityOnlyProduct = activeProduct.sizing === "quantity-only";
   const activeColors = activeProduct.availableColors.length ? activeProduct.availableColors : COLORS;
-  const totalPieces = useMemo(() => isQuantityOnlyProduct ? quantityOnly : activeProduct.availableSizes.reduce((sum, size) => sum + sizeRun[size], 0), [activeProduct.availableSizes, isQuantityOnlyProduct, quantityOnly, sizeRun]);
+  const sortedProductSizes = useMemo(() => sortCatalogSizes(activeProduct.availableSizes), [activeProduct.availableSizes]);
+  const defaultSizeKeys = useMemo(() => sortedProductSizes.filter((size) => DEFAULT_VISIBLE_SIZES.has(size)), [sortedProductSizes]);
+  const extraSizeKeys = useMemo(() => sortedProductSizes.filter((size) => !DEFAULT_VISIBLE_SIZES.has(size)), [sortedProductSizes]);
+  const extraSizePieces = useMemo(() => extraSizeKeys.reduce((sum, size) => sum + (sizeRun[size] ?? 0), 0), [extraSizeKeys, sizeRun]);
+  const showExtraSizes = sizeExtrasOpen || extraSizePieces > 0;
+  const extraSizeToggleLabel = extraSizePieces > 0 ? "EXTRA SIZES - " + formatPieceCount(extraSizePieces).toUpperCase() : (showExtraSizes ? "- HIDE EXTRA SIZES" : "+ MORE SIZES: " + extraSizeKeys.join(", "));
+  const totalPieces = useMemo(() => isQuantityOnlyProduct ? quantityOnly : sortedProductSizes.reduce((sum, size) => sum + (sizeRun[size] ?? 0), 0), [isQuantityOnlyProduct, quantityOnly, sizeRun, sortedProductSizes]);
   const canvaValid = !canvaLink.trim() || /^https?:\/\/(www\.)?canva\.com\/.+/i.test(canvaLink.trim());
   const requiredMoq = METHOD_MOQ[method] ?? activeProduct.moq.minimum;
   const remainingPieces = requiredMoq > totalPieces ? requiredMoq - totalPieces : 0;
-  const moqNote = remainingPieces > 0
-    ? `${method} requires at least ${requiredMoq} ${requiredMoq === 1 ? "piece" : "pieces"}. Add ${remainingPieces} more.`
-    : `${method} minimum met.`;
+  const moqNote = remainingPieces > 0 ? method + " requires at least " + requiredMoq + " " + (requiredMoq === 1 ? "piece" : "pieces") + ". Add " + remainingPieces + " more." : method + " minimum met.";
+
   const moqMet = totalPieces >= requiredMoq;
   const hasArtworkPlan = Boolean(artworkName || canvaLink.trim() || artworkLater);
   const customerNameError = validateCustomerName(customerName);
   const customerContactError = validateCustomerContact(customerContact);
   const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && !customerNameError && !customerContactError && rightsConfirmed && !isSubmitting;
-  const submitButtonText = isSubmitting ? submitStage === "uploading" ? "UPLOADING ARTWORK" : "SUBMITTING" : "SUBMIT INQUIRY";
-  const messengerLink = `${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I want to ask about inquiry ${submittedInquiry?.ref || trackRef || ""}.`)}`;
-  const draftProduct = storedDraft ? products.find((product) => product.id === storedDraft.productId) : null;
-  const showStoredDraft = Boolean(storedDraft && draftProduct);
+  const submitButtonText = isSubmitting ? (submitStage === "uploading" ? "UPLOADING ARTWORK" : "SUBMITTING") : "SUBMIT INQUIRY";
+  const messengerLink = MESSENGER_LINK + "?text=" + encodeURIComponent("Hi TRRY, I want to ask about inquiry " + (submittedInquiry?.ref || trackRef || "") + ".");
+  const catalogCountLabel = `${products.length} ${products.length === 1 ? "product" : "products"}`;
+  const activeMethodSummary = activeProduct.tags.length ? activeProduct.tags.map((tag) => tag.replace(" Transfer", "")).join(" / ") : "Review with TRRY";
+  const selectedArtworkSummary = artworkName ? "Upload: " + artworkName : canvaLink.trim() ? "Canva link" : artworkLater ? "Send later" : "Not set";
+  const selectedArtworkStatus = artworkName ? "FILE ATTACHED" : canvaLink.trim() ? "CANVA LINK" : artworkLater ? "SEND LATER" : "NOT SET";
+  const attachedArtworkMeta = selectedArtworkFile ? (selectedArtworkFile.type || getFileExtension(selectedArtworkFile.name).toUpperCase()) + " / " + Math.max(1, Math.round(selectedArtworkFile.size / 1024)) + " KB" : "Ready for review";
+  const reviewContact = customerName.trim() || customerContact.trim() ? (customerName.trim() || "Name needed") + " / " + (customerContact.trim() || "Contact needed") : "Contact needed";
 
   function resetFormForProduct(product: Product) {
     setActiveProduct(product);
     setColor((product.availableColors.length ? product.availableColors : COLORS)[0]?.name || "Sand");
     setMethod(product.tags[0]);
     setSizeRun(createSizeRunForProduct(product));
+    setSizeExtrasOpen(false);
     setQuantityOnly(0);
     setEmptySizeInputs([]);
     setQuantityOnlyInputEmpty(false);
@@ -727,58 +794,13 @@ function openCatalog() {
   setScreen("catalog");
 }
 
-function resumeStoredDraft() {
-  const draft = storedDraft || getStoredDraft();
-  if (!draft) return;
-
-  const product = products.find((item) => item.id === draft.productId);
-  if (!product) {
-    clearStoredDraft();
-    setStoredDraft(null);
-    return;
-  }
-
-  setActiveProduct(product);
-  setColor(draft.color);
-  setMethod(draft.method);
-  setSizeRun(draft.sizeRun);
-  setQuantityOnly(draft.quantityOnly);
-  setEmptySizeInputs([]);
-  setQuantityOnlyInputEmpty(false);
-  setCanvaLink(draft.canvaLink);
-  setArtworkName(draft.artworkName);
-  setSelectedArtworkFile(null);
-  setArtworkLater(draft.artworkLater);
-  setPreviousReference(draft.previousReference);
-  setNeededDate(draft.neededDate);
-  setNotes(draft.notes);
-  setCustomerName(draft.customerName);
-  setCustomerContact(draft.customerContact);
-  setCustomerNameTouched(false);
-  setCustomerContactTouched(false);
-  setRightsConfirmed(draft.rightsConfirmed);
-  setUploadStatus(draft.artworkName ? "error" : "idle");
-  setUploadMessage(
-    draft.artworkName
-      ? `Reselect ${draft.artworkName} before submitting.`
-      : ""
-  );
-  setFormError("");
-  setScreen("customize");
-}
-
-function discardStoredDraft() {
-  clearStoredDraft();
-  setStoredDraft(null);
-}
-
   function openProduct(product: Product) {
     resetFormForProduct(product);
     setScreen("customize");
   }
 
   function updateSize(size: SizeKey, delta: number) {
-    setSizeRun((current) => ({ ...current, [size]: Math.max(0, current[size] + delta) }));
+    setSizeRun((current) => ({ ...current, [size]: Math.max(0, (current[size] ?? 0) + delta) }));
     setEmptySizeInputs((current) => current.filter((item) => item !== size));
   }
 
@@ -955,6 +977,13 @@ function discardStoredDraft() {
     setArtworkName(file.name);
     setUploadStatus("ready");
     setUploadMessage("Artwork ready for private upload after inquiry submission.");
+  }
+
+  function removeArtworkUpload() {
+    setSelectedArtworkFile(null);
+    setArtworkName("");
+    setUploadStatus("idle");
+    setUploadMessage("");
   }
 
   async function uploadArtworkForInquiry(reference: string, contact: string, file: File) {
@@ -1204,6 +1233,10 @@ setSubmittedInquiry(nextInquiry);
     );
   }
 
+  function SectionHeading({ number, title, helper, meta, metaTone }: { number: string; title: string; helper: string; meta?: string; metaTone?: "active" }) {
+    return <div className="sectionHeading"><span>{number}</span><div><h2>{title}</h2><p>{helper}</p></div>{meta ? <strong className={metaTone === "active" ? "activeMeta" : undefined}>{meta}</strong> : null}</div>;
+  }
+
   function ProductThumb({ product, large = false }: { product: Product; large?: boolean }) {
     const [imageFailed, setImageFailed] = useState(false);
 
@@ -1220,227 +1253,281 @@ setSubmittedInquiry(nextInquiry);
 
   function renderHome() {
     return (
-      <section className="screen homeScreen withNav" aria-labelledby="home-title">
-        <div className="homeTop">
-          <strong className="brandLockup">TRRY<span>*</span></strong>
-          <span className="estTag">EST. 2013</span>
+      <section className="screen homeScreen approvedHome withNav" aria-labelledby="home-title">
+        <header className="approvedHomeHeader">
+          <strong className="approvedBrand">TRRY<span>*</span></strong>
+          <div className="approvedMeta" aria-hidden="true">
+            <span><b suppressHydrationWarning>{manilaTime}</b> ILIGAN CITY</span>
+            <span>EST 2013 Ãƒâ€šÃ‚Â· SHIPS NATIONWIDE</span>
+          </div>
+        </header>
+        <div className="approvedDivider" aria-hidden="true" />
+        <section className="approvedHero">
+  <h1 id="home-title"><span>CUSTOM</span><span>APPAREL,</span><span>MADE SIMPLE.</span></h1>
+
+  <p>Browse the catalog. No sign-in needed.</p>
+</section>
+        <section className="approvedServices" aria-label="Services">
+          <h2>SERVICES</h2>
+          <div className="approvedServiceLedger">
+            <div className="approvedServiceRow">
+              <span className="approvedServiceIcon" aria-hidden="true"><svg viewBox="0 0 32 32" role="img"><path d="M11 5h10l5 4-3 5-3-2v15H12V12l-3 2-3-5 5-4Z" /></svg></span>
+              <strong>Custom t-shirts</strong>
+              <span>DTF / SCREEN</span>
+            </div>
+            <div className="approvedServiceRow">
+              <span className="approvedServiceIcon" aria-hidden="true"><svg viewBox="0 0 32 32" role="img"><path d="M5 21c.8-6.3 5.2-10 11-10s10.2 3.7 11 10H5Z" /><path d="M16 7v4" /><path d="M4 21h24" /></svg></span>
+              <strong>Embroidery and caps</strong>
+              <span>HOOP 20CM</span>
+            </div>
+            <div className="approvedServiceRow">
+              <span className="approvedServiceIcon" aria-hidden="true"><svg viewBox="0 0 32 32" role="img"><path d="M12 5h8l4 4-3 4-2-2v16h-6V11l-2 2-3-4 4-4Z" /><path d="M14 5l2 4 2-4" /></svg></span>
+              <strong>Uniforms and business</strong>
+              <span>MOQ 30</span>
+            </div>
+          </div>
+        </section>
+        <div className="approvedHomeActions">
+          <button className="approvedBrowseCta" onClick={openCatalog} type="button">Browse catalog</button>
+          <button className="approvedTrackLink" onClick={() => { setTrackSearched(false); setTrackedInquiry(null); setScreen("myInquiries"); }} type="button">Track an existing inquiry</button>
         </div>
-        <div className="homeHero">
-          <h1 id="home-title">CUSTOM APPAREL.<br />MADE SIMPLE.</h1>
-          <p>Browse the catalog. No sign-in needed.</p>
-        </div>
-
-{showStoredDraft ? (
-  <div className="draftResumeCard">
-    <div className="draftResumeCopy">
-      <small>SAVED DRAFT</small>
-      <strong>CONTINUE YOUR INQUIRY?</strong>
-      <span>
-        {draftProduct?.name || "Custom order"}
-      </span>
-    </div>
-
-    <div className="draftResumeActions">
-      <button
-        className="blackButton"
-        onClick={resumeStoredDraft}
-        type="button"
-      >
-        CONTINUE
-      </button>
-
-      <button
-        className="plainLink"
-        onClick={discardStoredDraft}
-        type="button"
-      >
-        DISCARD
-      </button>
-    </div>
-  </div>
-) : null}
-
-<div className="homeChoices" aria-label="TRRY order categories">
-          {["CUSTOM T-SHIRTS", "EMBROIDERY / CAPS", "UNIFORMS / BUSINESS ORDER"].map((label, index) => (
-            <button className="choiceCard" key={label} onClick={openCatalog} type="button">
-              <span className="choiceIcon">{index === 1 ? "CP" : index === 2 ? "UN" : "TS"}</span>
-              <span><small>0{index + 1}</small><strong>{label}</strong></span>
-            </button>
-          ))}
-        </div>
-        <button className="limeCta" onClick={openCatalog} type="button">BROWSE CATALOG</button>
-        <button className="textLink" onClick={() => { setTrackSearched(false); setTrackedInquiry(null); setScreen("myInquiries"); }} type="button">Track an existing inquiry</button>
         <BottomNav active="home" />
       </section>
     );
   }
-
   function renderCatalog() {
     return (
       <section className="screen catalogScreen withNav" aria-labelledby="catalog-title">
-        <AppHeader backTo="home" />
-        <div className="catalogIntro">
-          <h1 id="catalog-title">CHOOSE YOUR PRODUCT.</h1>
-          <p>Pick an item to start your order.</p>
-        </div>
-        {catalogStatus === "loading" ? <p className="emptyState">Loading catalog...</p> : null}
-        {catalogStatus === "error" ? <div className="formError" role="alert"><p>{catalogError}{ALLOW_CATALOG_FALLBACK ? " Showing local catalog fallback." : ""}</p><button className="outlineCta" onClick={loadCatalog} type="button">RETRY</button></div> : null}
-        {catalogStatus === "ready" && !products.length ? <p className="emptyState">Catalog is being prepared.</p> : null}
-        {catalogStatus !== "loading" && products.length ? (
-          <div className="catalogGrid">
-            {products.map((product) => (
-              <button className="productCard" key={product.id} onClick={() => openProduct(product)} type="button">
-                <ProductThumb product={product} />
-                <strong>{product.name}</strong>
-                <span className="methodTags">{product.tags.map((tag) => <small key={tag}>{tag.replace(" Transfer", "")}</small>)}</span>
-                <span className="priceLine">{getPriceDisplay(product)}</span>
-                <span className="blackCta">CUSTOMIZE</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
+        <AppHeader backTo="home" rightLabel={catalogCountLabel.toUpperCase()} />
+        <div className="catalogIntro"><span className="eyebrow">LIVE CATALOG</span><h1 id="catalog-title">CHOOSE YOUR PRODUCT.</h1><p>Final price depends on garment, print method, print size, placement, and quantity.</p></div>
+        {catalogStatus === "loading" ? <div className="catalogSkeleton" aria-label="Loading catalog"><span /><span /><span /><span /></div> : null}
+        {catalogStatus === "error" ? <div className="formError" role="alert"><p>{catalogError}{ALLOW_CATALOG_FALLBACK ? " Showing local catalog fallback." : ""}</p><button className="outlineCta" onClick={loadCatalog} type="button">RETRY CATALOG</button></div> : null}
+        {catalogStatus === "ready" && !products.length ? <p className="emptyState">Catalog is being prepared. Please check again soon.</p> : null}
+        {catalogStatus !== "loading" && products.length ? <div className="catalogGrid">{products.map((product) => <button className="productCard" key={product.id} onClick={() => openProduct(product)} type="button"><ProductThumb product={product} /><span className="productMeta"><small>{product.sizing === "quantity-only" ? "QUANTITY ORDER" : "SIZE RUN"}</small><strong>{product.name}</strong></span>{product.description ? <span className="productDescription">{product.description}</span> : null}<span className="methodTags">{product.tags.map((tag) => <small key={tag}>{tag.replace(" Transfer", "")}</small>)}</span><span className="priceLine">{getPriceDisplay(product)}</span>{product.moq.minimum > 1 ? <span className="moqChip">MOQ {product.moq.minimum} PCS</span> : null}<span className="blackCta">CUSTOMIZE</span></button>)}</div> : null}
         <BottomNav active="catalog" />
       </section>
     );
-  }
-
-  function renderCustomize() {
+  }  function renderCustomize() {
     return (
       <section className="screen customizeScreen withNav" aria-labelledby="customize-title">
-        <AppHeader backTo="catalog" />
+        <AppHeader backTo="catalog" rightLabel="INQUIRY" />
         <form className="customizeForm" onSubmit={submitInquiry} noValidate>
           <section className="selectedProduct">
             <ProductThumb product={activeProduct} large />
             <div>
+              <span>SELECTED PRODUCT</span>
               <h1 id="customize-title">{activeProduct.name}</h1>
-              <p>{getPriceDisplay(activeProduct)}</p>
+              {activeProduct.description ? <p>{activeProduct.description}</p> : null}
+              <strong>{getPriceDisplay(activeProduct)}</strong>
+              <small>{activeProduct.moq.note} / {activeMethodSummary}</small>
             </div>
           </section>
 
-          <section className="formSection">
-            <h2>COLOR</h2>
-            <div className="swatches">{activeColors.map((item) => <button aria-label={item.name} className={color === item.name ? "selected" : ""} key={item.name} onClick={() => setColor(item.name)} style={{ background: item.value }} type="button" />)}</div>
+          <section className="formSection methodSection">
+            <SectionHeading number="01" title="PRINT METHOD" helper="Choose how TRRY should decorate this item." />
+            <div className="methodCards">
+              {activeProduct.tags.map((item) => (
+                <button className={method === item ? "selected" : ""} key={item} onClick={() => setMethod(item)} type="button">
+                  <span>
+                    <strong>{item.toUpperCase()}</strong>
+                    {method === item ? <b>SELECTED</b> : null}
+                  </span>
+                  <small>{item === "DTF Transfer" ? "Full-color, detailed prints" : item === "Embroidery" ? "Stitched, premium finish" : "Best for bulk, bold colors"}</small>
+                </button>
+              ))}
+            </div>
           </section>
 
-          <section className="formSection">
-            <h2>PRINT METHOD</h2>
-            <div className="methodCards">{activeProduct.tags.map((item) => <button className={method === item ? "selected" : ""} key={item} onClick={() => setMethod(item)} type="button"><strong>{item.toUpperCase()}</strong><small>{item === "DTF Transfer" ? "Full-color, detailed prints" : item === "Embroidery" ? "Stitched, premium finish" : "Best for bulk, bold colors"}</small></button>)}</div>
+          <section className="formSection colorSection">
+            <SectionHeading number="02" title="COLOR" helper="Pick the closest garment color for quote review." meta={color} />
+            <div className="swatches">
+              {activeColors.map((item) => (
+                <button aria-label={item.name} className={color === item.name ? "selected" : ""} key={item.name} onClick={() => setColor(item.name)} style={{ background: item.value }} type="button" />
+              ))}
+            </div>
           </section>
 
-          <section className="formSection">
-            <h2>{isQuantityOnlyProduct ? "QUANTITY" : "SIZE RUN"}</h2>
-            {isQuantityOnlyProduct ? <div className="quantityOnlyControl"><button onClick={() => updateQuantityOnly(-1)} type="button">-</button><input aria-label="Quantity" inputMode="numeric" min="0" onBlur={() => setQuantityOnlyInputEmpty(false)} onChange={(event) => updateQuantityOnlyInput(event.target.value)} pattern="[0-9]*" step="1" type="number" value={quantityOnlyInputEmpty ? "" : quantityOnly} /><button onClick={() => updateQuantityOnly(1)} type="button">+</button></div> : <div className="sizeRunTable">{activeProduct.availableSizes.map((size) => <div className="sizeRunRow" key={size}><strong>{size}</strong><button onClick={() => updateSize(size, -1)} type="button">-</button><input aria-label={`${size} quantity`} inputMode="numeric" min="0" onBlur={() => resolveSizeInput(size)} onChange={(event) => updateSizeInput(size, event.target.value)} pattern="[0-9]*" step="1" type="number" value={emptySizeInputs.includes(size) ? "" : sizeRun[size]} /><button onClick={() => updateSize(size, 1)} type="button">+</button></div>)}</div>}
-            <div className="totalPieces"><span>TOTAL PIECES</span><strong>{totalPieces}</strong></div>
+          <section className="formSection quantitySection">
+            <SectionHeading number="03" title={isQuantityOnlyProduct ? "QUANTITY" : "SIZE & QUANTITY"} helper={isQuantityOnlyProduct ? "Set total pieces for this product." : "Enter pieces per size. Total updates live."} meta={formatPieceCount(totalPieces)} />
+            {isQuantityOnlyProduct ? (
+              <div className="quantityOnlyControl">
+                <button aria-label="Decrease quantity" onClick={() => updateQuantityOnly(-1)} type="button">-</button>
+                <input aria-label="Quantity" inputMode="numeric" min="0" onBlur={() => setQuantityOnlyInputEmpty(false)} onChange={(event) => updateQuantityOnlyInput(event.target.value)} pattern="[0-9]*" step="1" type="number" value={quantityOnlyInputEmpty ? "" : quantityOnly} />
+                <button aria-label="Increase quantity" onClick={() => updateQuantityOnly(1)} type="button">+</button>
+              </div>
+            ) : (
+              <div className="sizeRunCompact">
+                {defaultSizeKeys.length ? (
+                  <div className="sizeRunGrid">
+                    {defaultSizeKeys.map((size) => (
+                      <div className="sizeRunRow compact" key={size}>
+                        <strong>{size}</strong>
+                        <button aria-label={`Decrease ${size}`} onClick={() => updateSize(size, -1)} type="button">-</button>
+                        <input aria-label={`${size} quantity`} inputMode="numeric" min="0" onBlur={() => resolveSizeInput(size)} onChange={(event) => updateSizeInput(size, event.target.value)} pattern="[0-9]*" step="1" type="number" value={emptySizeInputs.includes(size) ? "" : (sizeRun[size] ?? 0)} />
+                        <button aria-label={`Increase ${size}`} onClick={() => updateSize(size, 1)} type="button">+</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {extraSizeKeys.length ? (
+                  <>
+                    {showExtraSizes ? (
+                      <div className="sizeRunGrid extraSizes">
+                        {extraSizeKeys.map((size) => (
+                          <div className="sizeRunRow compact" key={size}>
+                            <strong>{size}</strong>
+                            <button aria-label={`Decrease ${size}`} onClick={() => updateSize(size, -1)} type="button">-</button>
+                            <input aria-label={`${size} quantity`} inputMode="numeric" min="0" onBlur={() => resolveSizeInput(size)} onChange={(event) => updateSizeInput(size, event.target.value)} pattern="[0-9]*" step="1" type="number" value={emptySizeInputs.includes(size) ? "" : (sizeRun[size] ?? 0)} />
+                            <button aria-label={`Increase ${size}`} onClick={() => updateSize(size, 1)} type="button">+</button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    <button className={extraSizePieces > 0 ? "sizeToggle hasPieces" : "sizeToggle"} onClick={() => setSizeExtrasOpen((current) => extraSizePieces > 0 ? true : !current)} type="button">
+                      {extraSizeToggleLabel}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            )}
             <p className={moqMet || totalPieces === 0 ? "moqNote" : "moqNote error"}>{moqNote}</p>
           </section>
 
           <section className="formSection artworkSection">
-            <h2>UPLOAD DESIGN</h2>
-            <label className="uploadDrop"><input accept=".png,.jpg,.jpeg,.pdf,.svg,.ai,.eps,.psd" onChange={(event) => handleUpload(event.target.files?.[0])} type="file" /><strong>{artworkName || "DROP YOUR FILE HERE"}</strong><small>Accepted: PNG, JPG, PDF, SVG, AI, EPS, PSD</small></label>
+            <SectionHeading number="04" title="ARTWORK" helper="Upload first, or use Canva/send later." meta={selectedArtworkStatus} metaTone={hasArtworkPlan ? "active" : undefined} />
+            <div className="uploadPanel">
+              <div className="uploadPanelHeader">UPLOAD DESIGN</div>
+              {artworkName ? (
+                <div className="attachedFileBox">
+                  <span className="attachmentStatus">1 FILE ATTACHED</span>
+                  <strong>{artworkName}</strong>
+                  <small>{attachedArtworkMeta}</small>
+                  <button className="plainLink" onClick={removeArtworkUpload} type="button">REMOVE</button>
+                </div>
+              ) : (
+                <label className={uploadStatus === "error" ? "uploadDrop hasError" : "uploadDrop"}>
+                  <input accept=".png,.jpg,.jpeg,.pdf,.svg,.ai,.eps,.psd" onChange={(event) => handleUpload(event.target.files?.[0])} type="file" />
+                  <span aria-hidden="true" className="uploadIcon">UPLOAD</span>
+                  <strong>TAP TO ADD YOUR FILE</strong>
+                  <small>PNG, JPG, PDF, SVG, AI, EPS, PSD</small>
+                </label>
+              )}
+            </div>
             {uploadStatus === "ready" ? <p className="uploadState good">Artwork ready for review.</p> : null}
             {uploadStatus === "error" ? <p className="uploadState bad">{uploadMessage}</p> : null}
-            <label className="stackedField"><span>CANVA LINK OPTIONAL</span><input aria-invalid={!canvaValid} placeholder="https://canva.com/design/..." value={canvaLink} onChange={(event) => setCanvaLink(event.target.value)} /></label>
-            <label className="rightsCheck"><input checked={artworkLater} onChange={(event) => setArtworkLater(event.target.checked)} type="checkbox" /> <span>I will send artwork after this inquiry.</span></label>
+            <div className="artworkDivider">OR USE ANOTHER OPTION</div>
+            <label className="stackedField canvaField">
+              <span>PASTE CANVA LINK</span>
+              <small>Make sure link access is set to Anyone with the link.</small>
+              <input aria-invalid={!canvaValid} placeholder="https://canva.com/design/..." value={canvaLink} onChange={(event) => setCanvaLink(event.target.value)} />
+            </label>
+            <label className="rightsCheck sendLaterCheck">
+              <input checked={artworkLater} onChange={(event) => setArtworkLater(event.target.checked)} type="checkbox" />
+              <span>I will send artwork after this inquiry.</span>
+            </label>
           </section>
 
-          {method === "Embroidery" || activeProduct.referenceRequired ? (
-            <section className="formSection pinkBox">
-              <h2>PREVIOUS EMBROIDERY REFERENCE</h2>
-              <p>Already embroidered before? Send the prior job name or reference so TRRY can check if digitizing is ready.</p>
-              <input placeholder="Example: Polo logo batch 2025" value={previousReference} onChange={(event) => setPreviousReference(event.target.value)} />
-              <p>New embroidery logos may need digitizing review before pricing is final.</p>
-            </section>
-          ) : null}
-
-          <section className="formSection">
-            <h2>NEEDED DATE</h2>
+          <section className="formSection fulfillmentSection">
+            <SectionHeading number="05" title="FULFILLMENT" helper="TRRY will confirm pickup or delivery details after review." />
             <input value={neededDate} onChange={(event) => setNeededDate(event.target.value)} type="date" />
-          </section>
-
-          <section className="formSection">
-            <h2>NOTES OPTIONAL</h2>
-            <textarea placeholder="Placement, colors, deadline, etc." value={notes} onChange={(event) => setNotes(event.target.value)} />
+            {method === "Embroidery" ? (
+              <div className="pinkBox inline">
+                <h2>PREVIOUS EMBROIDERY REFERENCE</h2>
+                <p>Already embroidered before? Send the prior job name or reference so TRRY can check if digitizing is ready.</p>
+                <input placeholder="Example: Polo logo batch 2025" value={previousReference} onChange={(event) => setPreviousReference(event.target.value)} />
+              </div>
+            ) : null}
           </section>
 
           <section className="formSection contactSection">
-            <h2>CONTACT</h2>
-            <input aria-describedby="customer-name-error" aria-invalid={customerNameTouched && Boolean(customerNameError)} placeholder="Your full name" value={customerName} onBlur={() => { setCustomerNameTouched(true); setCustomerName(customerName.trim()); }} onChange={(event) => setCustomerName(event.target.value)} />
+            <SectionHeading number="06" title="CONTACT" helper="No account needed. This is for quote updates only." />
+            <label className="stackedField">
+              <span>NAME</span>
+              <input aria-describedby="customer-name-error" aria-invalid={customerNameTouched && Boolean(customerNameError)} placeholder="Your full name" value={customerName} onBlur={() => { setCustomerNameTouched(true); setCustomerName(customerName.trim()); }} onChange={(event) => setCustomerName(event.target.value)} />
+            </label>
             {customerNameTouched && customerNameError ? <p className="fieldError" id="customer-name-error" role="alert">{customerNameError}</p> : null}
-            <input aria-describedby="customer-contact-error" aria-invalid={customerContactTouched && Boolean(customerContactError)} placeholder="Phone number or Messenger" value={customerContact} onBlur={() => setCustomerContactTouched(true)} onChange={(event) => setCustomerContact(event.target.value)} />
+            <label className="stackedField">
+              <span>CONTACT NUMBER OR MESSENGER</span>
+              <input aria-describedby="customer-contact-error" aria-invalid={customerContactTouched && Boolean(customerContactError)} placeholder="Phone number or Messenger" value={customerContact} onBlur={() => setCustomerContactTouched(true)} onChange={(event) => setCustomerContact(event.target.value)} />
+            </label>
             {customerContactTouched && customerContactError ? <p className="fieldError" id="customer-contact-error" role="alert">{customerContactError}</p> : null}
             <p>We'll use this to send your quote and production updates.</p>
           </section>
 
-          <label className="rightsCheck"><input checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} type="checkbox" /> <span>I confirm I have the right to print this design.</span></label>
-          {formError ? <p className="formError" role="alert">{formError}</p> : null}
+          <section className="formSection reviewSection">
+            <SectionHeading number="07" title="REVIEW" helper="Check the inquiry summary before sending." />
+            <dl>
+              <div><dt>PRODUCT</dt><dd>{activeProduct.name}</dd></div>
+              <div><dt>METHOD</dt><dd>{method}</dd></div>
+              <div><dt>COLOR</dt><dd>{color}</dd></div>
+              <div><dt>QUANTITY</dt><dd>{formatPieceCount(totalPieces)}</dd></div>
+              <div><dt>FULFILLMENT</dt><dd>{neededDate ? `Needed by ${neededDate}` : "Date not set"}</dd></div>
+              <div><dt>ARTWORK</dt><dd>{selectedArtworkSummary}</dd></div>
+              <div><dt>CONTACT</dt><dd>{reviewContact}</dd></div>
+            </dl>
+          </section>
 
+          <section className="formSection notesSection">
+            <SectionHeading number="NOTE" title="NOTES OPTIONAL" helper="Placement, color notes, deadline, or other details." />
+            <textarea placeholder="Placement, colors, deadline, etc." value={notes} onChange={(event) => setNotes(event.target.value)} />
+          </section>
+
+          <label className="rightsCheck">
+            <input checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} type="checkbox" />
+            <span>I confirm I have the right to print this design.</span>
+          </label>
+          {formError ? <p className="formError" role="alert">{formError}</p> : null}
           <div className="stickySubmit">
-            <span>TOTAL: {totalPieces} {totalPieces === 1 ? "PC" : "PCS"}</span>
+            <span><strong>{activeProduct.name}</strong><small>{formatPieceCount(totalPieces)} / {method}</small></span>
             <button className="limeCta" disabled={!canSubmit} type="submit">{submitButtonText}</button>
           </div>
         </form>
       </section>
     );
-  }
-
-  function renderSubmitted() {
+  }  function renderSubmitted() {
     const current = submittedInquiry;
     return (
       <section className="screen submittedScreen withNav" aria-labelledby="submitted-title">
-        <AppHeader />
-        <h1 id="submitted-title">INQUIRY SENT!</h1>
-        <p>We received your request. Our team will review it and send a quote.</p>
-        <div className="receiptBox">
-          <h2>TRRY INQUIRY RECEIPT</h2>
-          <dl>
-            <div><dt>REF NO.</dt><dd>{current?.ref}<button className="copyMini" onClick={() => current?.ref && navigator.clipboard?.writeText(current.ref)} type="button">COPY</button></dd></div>
-            <div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div>
-            <div><dt>TOTAL PIECES</dt><dd>{current ? formatPieceCount(current.totalPieces) : ""}</dd></div>
-            <div><dt>METHOD</dt><dd>{current?.method}</dd></div>
-            <div><dt>STATUS</dt><dd><mark>{current?.statusLabel || "STATUS ERROR"}</mark></dd></div>
-            <div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div>
-          </dl>
-          <p>No quote before review.<br />No print without approval.</p>
-        </div>
+        <AppHeader rightLabel="RECEIPT" />
+        <div className="successHeader"><span>INQUIRY RECEIVED</span><h1 id="submitted-title">REFERENCE<br />{current?.ref || "TRRY"}</h1><p>We'll review your request and prepare your quotation. Screenshot this receipt for easy tracking.</p></div>
+        <div className="receiptBox"><h2>TRRY INQUIRY RECEIPT</h2><dl><div><dt>REF NO.</dt><dd>{current?.ref}<button className="copyMini" onClick={() => current?.ref && navigator.clipboard?.writeText(current.ref)} type="button">COPY</button></dd></div><div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div><div><dt>QUANTITY</dt><dd>{current ? formatPieceCount(current.totalPieces) : ""}</dd></div><div><dt>METHOD</dt><dd>{current?.method}</dd></div><div><dt>STATUS</dt><dd><mark>{current?.statusLabel || "STATUS ERROR"}</mark></dd></div><div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div></dl><p>No quote before review. No print without approval.</p></div>
         {formError ? <p className="formError" role="alert">{formError}</p> : null}
         {current?.artworkSource === "upload" && current.artworkUploadStatus === "failed" ? <button className="outlineCta" disabled={retryingArtwork} onClick={retryArtworkUpload} type="button">{retryingArtwork ? "UPLOADING ARTWORK" : "RETRY ARTWORK UPLOAD"}</button> : null}
-        <a className="blackButton" href={messengerLink} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a>
         <TrackerCard statusKey={current?.statusKey} />
+        <a className="blackButton" href={messengerLink} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a>
         <button className="outlineCta" onClick={() => setScreen("myInquiries")} type="button">VIEW ALL INQUIRIES</button>
         <BottomNav active="myInquiries" />
       </section>
     );
   }
-
   function TrackerCard({ statusKey }: { statusKey?: string }) {
     const progress = getInquiryProgress(statusKey);
+    const context = getTrackerContext(statusKey);
 
-    if (progress.closed) return <div className="trackerCard closed"><h2>TRACK YOUR ORDER <span>CLOSED</span></h2><p className="active">{progress.label}</p><small>This inquiry is closed and is not in active production progress.</small></div>;
+    if (progress.closed) return <div className="trackerCard closed"><h2>TRACK YOUR INQUIRY <span>CLOSED</span></h2><p className="active">{progress.label}</p><small>{context}</small></div>;
 
-    return <div className="trackerCard"><h2>TRACK YOUR ORDER <span>STEP {progress.step}/5</span></h2><div className="bar"><span style={{ width: `${progress.progress}%` }} /></div>{TRACKER_STEPS.map((step, index) => <p className={index === progress.step - 1 ? "active" : ""} key={step}>{index + 1}. {step}</p>)}<small>No quote before review. No print without approval. Est. quote reply within 24 hrs.</small></div>;
+    return <div className="trackerCard"><h2>TRACK YOUR INQUIRY <span>STEP {progress.step}/5</span></h2><div className="bar"><span style={{ width: `${progress.progress}%` }} /></div>{TRACKER_STEPS.map((step, index) => <p className={index === progress.step - 1 ? "active" : index < progress.step - 1 ? "done" : ""} key={step}>{index + 1}. {step}</p>)}<small>{context}</small></div>;
   }
 
   function renderMyInquiries() {
     return (
       <section className="screen myInquiriesScreen withNav" aria-labelledby="my-inquiries-title">
-        <AppHeader backTo="home" />
-        <h1 id="my-inquiries-title">MY INQUIRIES.</h1>
-        <p>Your submitted orders, by inquiry number.</p>
+        <AppHeader backTo="home" rightLabel={`${inquiries.length} SAVED`} />
+        <div className="myIntro"><span className="eyebrow">TRACKING DESK</span><h1 id="my-inquiries-title">MY INQUIRIES.</h1><p>Saved inquiries refresh when this screen opens.</p></div>
         <form className="trackForm" onSubmit={trackInquiry}>
+          <SectionHeading number="LOOKUP" title="TRACK AN INQUIRY" helper="Enter the reference and the same contact used for the request." />
           <label><span>INQUIRY NUMBER</span><input placeholder="TRRY-5921" value={trackRef} onChange={(event) => setTrackRef(event.target.value)} /></label>
           <label><span>CONTACT</span><input placeholder="Phone number or Messenger used in order" value={trackContact} onChange={(event) => setTrackContact(event.target.value)} /></label>
           <button className="limeCta" disabled={isTracking} type="submit">{isTracking ? "TRACKING" : "TRACK INQUIRY"}</button>
         </form>
         {isSyncingInquiries ? <p className="syncStatus">UPDATING INQUIRIES...</p> : null}
-        {trackSearched ? trackedInquiry ? <div className="receiptBox"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{normalizeQuantityDisplay(trackedInquiry.quantity)}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>TRRY will review your request before production.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
-        <div className="inquiryList">
-          {inquiries.length ? inquiries.map((item) => <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><strong>{item.ref}</strong><span>{item.productName} - {formatPieceCount(item.totalPieces)}</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><mark>{item.statusLabel || "STATUS ERROR"}</mark></button>) : <p className="emptyState">No inquiries yet. Browse the catalog to start one.</p>}
-        </div>
+        {trackSearched ? trackedInquiry ? <div className="receiptBox foundInquiry"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{normalizeQuantityDisplay(trackedInquiry.quantity)}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>Saved to My Inquiries for future status refresh.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
+        <div className="inquiryListHeader"><h2>SAVED INQUIRIES</h2></div>
+        <div className="inquiryList">{inquiries.length ? inquiries.map((item) => { const nextAction = getNextActionLabel(item.statusKey); return <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><span className="inquiryTop"><strong>{item.productName}</strong><mark>{item.statusLabel || "STATUS ERROR"}</mark></span><span>{item.ref} / {formatPieceCount(item.totalPieces)}</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><small>NEXT: {nextAction}</small><b>VIEW DETAILS</b></button>; }) : <p className="emptyState">No saved inquiries yet. Browse the catalog to start one, or use the tracking form above.</p>}</div>
         <BottomNav active="myInquiries" />
       </section>
     );
   }
-
   return (
     <main className="phoneFrame">
       {screen === "home" ? renderHome() : null}
@@ -1451,3 +1538,10 @@ setSubmittedInquiry(nextInquiry);
     </main>
   );
 }
+
+
+
+
+
+
+

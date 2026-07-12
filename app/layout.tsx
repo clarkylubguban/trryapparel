@@ -1,5 +1,32 @@
 import type { Metadata } from "next";
+import {
+  Archivo_Black,
+  Space_Grotesk,
+  Space_Mono,
+} from "next/font/google";
+
 import "./globals.css";
+
+const archivoBlack = Archivo_Black({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-brand",
+  display: "swap",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"],
+  variable: "--font-human",
+  display: "swap",
+});
+
+const spaceMono = Space_Mono({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-machine",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "TRRY Apparel / Tariray | Custom Shirts and Merch",
@@ -14,7 +41,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body
+        className={`${spaceGrotesk.className} ${archivoBlack.variable} ${spaceGrotesk.variable} ${spaceMono.variable}`}
+      >
+        {children}
+      </body>
     </html>
   );
 }
