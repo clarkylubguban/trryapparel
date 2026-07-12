@@ -4,9 +4,11 @@ import { getSupabaseAdminClient } from "../../../lib/supabaseServer";
 
 type Method = "DTF Transfer" | "Embroidery" | "Screen Print";
 type ArtworkSource = "upload" | "canva" | "send-later";
+type FulfillmentMethod = "pickup" | "delivery";
 
 const METHODS: Method[] = ["DTF Transfer", "Embroidery", "Screen Print"];
 const ARTWORK_SOURCES: ArtworkSource[] = ["upload", "canva", "send-later"];
+const FULFILLMENT_METHODS: FulfillmentMethod[] = ["pickup", "delivery"];
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -84,6 +86,10 @@ export async function POST(request: Request) {
   const methodMoq = typeof body.methodMoq === "number" ? body.methodMoq : Number(body.methodMoq);
   const customerSubmittedAt = text(body.customerSubmittedAt);
   const neededDate = text(body.neededDate);
+  const fulfillmentMethod = text(body.fulfillmentMethod) as FulfillmentMethod;
+  const deliveryCity = text(body.deliveryCity);
+  const deliveryAddress = text(body.deliveryAddress);
+  const deliveryLandmark = text(body.deliveryLandmark);
 
   if (
     !customerName ||
@@ -93,6 +99,7 @@ export async function POST(request: Request) {
     !Number.isFinite(totalPieces) ||
     totalPieces <= 0 ||
     !ARTWORK_SOURCES.includes(artworkSource) ||
+    !FULFILLMENT_METHODS.includes(fulfillmentMethod) ||
     !rightsConfirmed
   ) {
     return NextResponse.json({ error: "Please complete the required inquiry details." }, { status: 400 });
@@ -100,6 +107,10 @@ export async function POST(request: Request) {
 
   if (artworkSource === "canva" && !/^https?:\/\/(www\.)?canva\.com\/.+/i.test(canvaLink)) {
     return NextResponse.json({ error: "Please enter a valid canva.com link." }, { status: 400 });
+  }
+
+  if (fulfillmentMethod === "delivery" && (!deliveryCity || !deliveryAddress)) {
+    return NextResponse.json({ error: "Please complete the delivery details." }, { status: 400 });
   }
 
   if (artworkSource === "upload" && !artworkName) {
@@ -125,11 +136,16 @@ export async function POST(request: Request) {
       `Canva link: ${canvaLink || "none"}`,
       `Uploaded filename: ${artworkName || "none"}`,
       `Artwork rights confirmed: ${rightsConfirmed ? "yes" : "no"}`,
+      `Fulfillment: ${fulfillmentMethod}`,
+      `Delivery city/barangay: ${deliveryCity || "none"}`,
+      `Delivery address: ${deliveryAddress || "none"}`,
+      `Delivery landmark: ${deliveryLandmark || "none"}`,
       `Notes: ${notes || "none"}`,
+
       `Customer-side submitted at: ${customerSubmittedAt || "not provided"}`,
     ].join("\n");
 
-    const { error } = await supabase.from("ops_inquiries").insert({
+    const baseInquiryRow = {
       id: reference,
       customer_name: customerName,
       contact: customerContact,
@@ -143,12 +159,28 @@ export async function POST(request: Request) {
       due_date: neededDate || null,
       created_at: createdAt,
       updated_at: createdAt,
-    });
+    };
+    const inquiryRow = {
+      ...baseInquiryRow,
+      fulfillment_method: fulfillmentMethod,
+      delivery_city: fulfillmentMethod === "delivery" ? deliveryCity : null,
+      delivery_address: fulfillmentMethod === "delivery" ? deliveryAddress : null,
+      delivery_landmark: fulfillmentMethod === "delivery" ? deliveryLandmark || null : null,
+    };
+
+    const { error } = await supabase.from("ops_inquiries").insert(inquiryRow);
 
     if (error) {
-      return NextResponse.json({ error: "Unable to submit inquiry right now. Please try again." }, { status: 500 });
-    }
+      const missingFulfillmentColumns = /fulfillment_method|delivery_city|delivery_address|delivery_landmark|schema cache|could not find/i.test(error.message || "");
+      if (!missingFulfillmentColumns) {
+        return NextResponse.json({ error: "Unable to submit inquiry right now. Please try again." }, { status: 500 });
+      }
 
+      const { error: retryError } = await supabase.from("ops_inquiries").insert(baseInquiryRow);
+      if (retryError) {
+        return NextResponse.json({ error: "Unable to submit inquiry right now. Please try again." }, { status: 500 });
+      }
+    }
     return NextResponse.json({
       reference,
       status: "FOR REVIEW",

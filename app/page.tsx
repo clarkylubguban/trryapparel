@@ -8,6 +8,7 @@ type SizeKey = string;
 type UploadStatus = "idle" | "ready" | "error";
 type ArtworkSource = "upload" | "canva" | "send-later";
 type ArtworkUploadStatus = "not-needed" | "uploaded" | "failed";
+type FulfillmentMethod = "pickup" | "delivery";
 type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "PROOF APPROVAL" | "IN PRODUCTION" | "PICKUP OR DELIVERY" | "DELIVERED" | "INQUIRY CLOSED / LOST" | "STATUS UPDATE" | "STATUS ERROR";
 
 type SizeRun = Record<SizeKey, number>;
@@ -75,6 +76,10 @@ type Inquiry = {
   artworkUploadedAt: string;
   previousReference: string;
   neededDate: string;
+  fulfillmentMethod: FulfillmentMethod | "";
+  deliveryCity: string;
+  deliveryAddress: string;
+  deliveryLandmark: string;
   notes: string;
   customerName: string;
   customerContact: string;
@@ -92,6 +97,10 @@ type TrackedInquiry = {
   artworkLabel: string
   statusKey: string;
   statusLabel: InquiryStatus;
+  fulfillmentMethod?: FulfillmentMethod | "";
+  deliveryCity?: string;
+  deliveryAddress?: string;
+  deliveryLandmark?: string;
 };
 type InquiryDraft = {
   version: 1;
@@ -106,6 +115,10 @@ type InquiryDraft = {
   artworkLater: boolean;
   previousReference: string;
   neededDate: string;
+  fulfillmentMethod: FulfillmentMethod | "";
+  deliveryCity: string;
+  deliveryAddress: string;
+  deliveryLandmark: string;
   notes: string;
   customerName: string;
   customerContact: string;
@@ -227,7 +240,7 @@ function normalizeMethod(value: string) {
 
   if (key === "DTF") return "DTF Transfer";
   if (key === "EMBROIDERY") return "Embroidery";
-  if (key === "SCREEN PRINT" || key === "SCREENPRINT") return "Screen Print";
+  if (key === "SCREEN PRINT" || key === "SCREENPRINT" || key === "SCREEN PRINTING" || key === "SCREENPRINTING") return "Screen Print";
   if (key === "DTF TRANSFER") return "DTF Transfer";
 
   if (process.env.NODE_ENV === "development") {
@@ -381,6 +394,21 @@ function getArtworkStateLabel(inquiry: Inquiry | null | undefined) {
   return "Artwork uploaded";
 }
 
+function getFulfillmentMethod(value: unknown): FulfillmentMethod | "" {
+  return value === "pickup" || value === "delivery" ? value : "";
+}
+
+function getFulfillmentLabel(method: FulfillmentMethod | "") {
+  if (method === "pickup") return "Pickup";
+  if (method === "delivery") return "Delivery";
+  return "Not selected";
+}
+
+function getDeliverySummary(city: string, address: string, landmark: string) {
+  const parts = [address.trim(), city.trim(), landmark.trim() ? `Landmark: ${landmark.trim()}` : ""].filter(Boolean);
+  return parts.join(" / ");
+}
+
 function getArtworkUploadStatus(item: Record<string, unknown>, source: ArtworkSource): ArtworkUploadStatus {
   if (item.artworkUploadStatus === "uploaded" || item.artworkUploadStatus === "failed" || item.artworkUploadStatus === "not-needed") return item.artworkUploadStatus;
   if (source !== "upload") return "not-needed";
@@ -500,6 +528,10 @@ function getStoredInquiries(): Inquiry[] {
         artworkUploadedAt: typeof item.artworkUploadedAt === "string" ? item.artworkUploadedAt : "",
         previousReference: typeof item.previousReference === "string" ? item.previousReference : "",
         neededDate: typeof item.neededDate === "string" ? item.neededDate : "",
+        fulfillmentMethod: getFulfillmentMethod(item.fulfillmentMethod),
+        deliveryCity: typeof item.deliveryCity === "string" ? item.deliveryCity : "",
+        deliveryAddress: typeof item.deliveryAddress === "string" ? item.deliveryAddress : "",
+        deliveryLandmark: typeof item.deliveryLandmark === "string" ? item.deliveryLandmark : "",
         notes: typeof item.notes === "string" ? item.notes : "",
         customerName: typeof item.customerName === "string" ? item.customerName : "",
         customerContact: typeof item.customerContact === "string" ? item.customerContact : typeof item.contact === "string" ? item.contact : "",
@@ -584,6 +616,10 @@ function getStoredDraft(): InquiryDraft | null {
           : "",
       neededDate:
         typeof parsed.neededDate === "string" ? parsed.neededDate : "",
+      fulfillmentMethod: getFulfillmentMethod(parsed.fulfillmentMethod),
+      deliveryCity: typeof parsed.deliveryCity === "string" ? parsed.deliveryCity : "",
+      deliveryAddress: typeof parsed.deliveryAddress === "string" ? parsed.deliveryAddress : "",
+      deliveryLandmark: typeof parsed.deliveryLandmark === "string" ? parsed.deliveryLandmark : "",
       notes: typeof parsed.notes === "string" ? parsed.notes : "",
       customerName:
         typeof parsed.customerName === "string" ? parsed.customerName : "",
@@ -601,7 +637,7 @@ function getStoredDraft(): InquiryDraft | null {
 
 function clearStoredDraft() {
   window.localStorage.removeItem(DRAFT_STORAGE_KEY);
-}
+}
 export default function HomePage() {
   const [screen, setScreen] = useState<Screen>("home");
   const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
@@ -623,6 +659,10 @@ export default function HomePage() {
   const [uploadMessage, setUploadMessage] = useState("");
   const [previousReference, setPreviousReference] = useState("");
   const [neededDate, setNeededDate] = useState("");
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod | "">("");
+  const [deliveryCity, setDeliveryCity] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryLandmark, setDeliveryLandmark] = useState("");
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [datePickerMonth, setDatePickerMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12));
   const [notes, setNotes] = useState("");
@@ -733,6 +773,10 @@ export default function HomePage() {
       artworkLater,
       previousReference,
       neededDate,
+      fulfillmentMethod,
+      deliveryCity,
+      deliveryAddress,
+      deliveryLandmark,
       notes,
       customerName,
       customerContact,
@@ -764,6 +808,10 @@ export default function HomePage() {
     artworkLater,
     previousReference,
     neededDate,
+      fulfillmentMethod,
+      deliveryCity,
+      deliveryAddress,
+      deliveryLandmark,
     notes,
     customerName,
     customerContact,
@@ -800,7 +848,11 @@ export default function HomePage() {
   const hasArtworkPlan = Boolean(artworkName || canvaLink.trim() || artworkLater);
   const customerNameError = validateCustomerName(customerName);
   const customerContactError = validateCustomerContact(customerContact);
-  const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && !customerNameError && !customerContactError && rightsConfirmed && !isSubmitting;
+  const deliveryCityRequired = fulfillmentMethod === "delivery" && !deliveryCity.trim();
+  const deliveryAddressRequired = fulfillmentMethod === "delivery" && !deliveryAddress.trim();
+  const fulfillmentComplete = fulfillmentMethod === "pickup" || (fulfillmentMethod === "delivery" && !deliveryCityRequired && !deliveryAddressRequired);
+  const fulfillmentReview = fulfillmentMethod === "delivery" ? "Delivery / " + (getDeliverySummary(deliveryCity, deliveryAddress, deliveryLandmark) || "Address needed") : fulfillmentMethod === "pickup" ? "Pickup at TRRY Apparel, Iligan City" : "Not selected";
+  const canSubmit = totalPieces > 0 && moqMet && canvaValid && hasArtworkPlan && fulfillmentComplete && !customerNameError && !customerContactError && rightsConfirmed && !isSubmitting;
   const submitButtonText = isSubmitting ? (submitStage === "uploading" ? "UPLOADING ARTWORK" : "SUBMITTING") : "SUBMIT INQUIRY";
   const messengerLink = MESSENGER_LINK + "?text=" + encodeURIComponent("Hi TRRY, I want to ask about inquiry " + (submittedInquiry?.ref || trackRef || "") + ".");
   const catalogCountLabel = `${products.length} ${products.length === 1 ? "product" : "products"}`;
@@ -840,6 +892,10 @@ export default function HomePage() {
     setArtworkLater(false);
     setPreviousReference("");
     setNeededDate("");
+    setFulfillmentMethod("");
+    setDeliveryCity("");
+    setDeliveryAddress("");
+    setDeliveryLandmark("");
     setDatePickerOpen(false);
     setNotes("");
     setRightsConfirmed(false);
@@ -910,6 +966,10 @@ function openCatalog() {
       status: normalizeStatus(freshInquiry.statusLabel),
       statusKey: freshInquiry.statusKey,
       statusLabel: freshInquiry.statusLabel || "STATUS ERROR",
+      fulfillmentMethod: getFulfillmentMethod(freshInquiry.fulfillmentMethod) || oldItem.fulfillmentMethod,
+      deliveryCity: freshInquiry.deliveryCity || oldItem.deliveryCity,
+      deliveryAddress: freshInquiry.deliveryAddress || oldItem.deliveryAddress,
+      deliveryLandmark: freshInquiry.deliveryLandmark || oldItem.deliveryLandmark,
     };
   }
 
@@ -943,6 +1003,10 @@ function openCatalog() {
       status: normalizeStatus(freshInquiry.statusLabel),
       statusKey: freshInquiry.statusKey,
       statusLabel: freshInquiry.statusLabel || "STATUS ERROR",
+      fulfillmentMethod: getFulfillmentMethod(freshInquiry.fulfillmentMethod),
+      deliveryCity: freshInquiry.deliveryCity || "",
+      deliveryAddress: freshInquiry.deliveryAddress || "",
+      deliveryLandmark: freshInquiry.deliveryLandmark || "",
     };
   }
 
@@ -1107,6 +1171,9 @@ setInquiries(nextList);
       else if (!moqMet) setFormError(moqNote);
       else if (!canvaValid) setFormError("Canva link must be a valid canva.com link.");
       else if (!hasArtworkPlan) setFormError("Upload artwork, paste a Canva link, or choose send artwork later.");
+      else if (!fulfillmentMethod) setFormError("Choose pickup or delivery before submitting.");
+      else if (deliveryCityRequired) setFormError("Enter your city or barangay for delivery.");
+      else if (deliveryAddressRequired) setFormError("Enter your complete delivery address.");
       else if (customerNameError) {
         setCustomerNameTouched(true);
         setFormError(customerNameError);
@@ -1148,6 +1215,10 @@ setInquiries(nextList);
           artworkSource,
           previousReference: previousReference.trim(),
           neededDate,
+          fulfillmentMethod,
+          deliveryCity: deliveryCity.trim(),
+          deliveryAddress: deliveryAddress.trim(),
+          deliveryLandmark: deliveryLandmark.trim(),
           notes: notes.trim(),
           customerName: customerName.trim(),
           customerContact: customerContact.trim(),
@@ -1205,6 +1276,10 @@ setInquiries(nextList);
         artworkUploadedAt,
         previousReference: previousReference.trim(),
         neededDate,
+          fulfillmentMethod,
+          deliveryCity: deliveryCity.trim(),
+          deliveryAddress: deliveryAddress.trim(),
+          deliveryLandmark: deliveryLandmark.trim(),
         notes: notes.trim(),
         customerName: customerName.trim(),
         customerContact: customerContact.trim(),
@@ -1295,6 +1370,7 @@ setSubmittedInquiry(nextInquiry);
   function SectionHeading({ number, title, helper, meta, metaTone }: { number: string; title: string; helper: string; meta?: string; metaTone?: "active" }) {
     return <div className="sectionHeading"><span>{number}</span><div><h2>{title}</h2><p>{helper}</p></div>{meta ? <strong className={metaTone === "active" ? "activeMeta" : undefined}>{meta}</strong> : null}</div>;
   }
+
 
   function ProductThumb({ product, large = false }: { product: Product; large?: boolean }) {
     const [imageFailed, setImageFailed] = useState(false);
@@ -1309,7 +1385,6 @@ setSubmittedInquiry(nextInquiry);
       </div>
     );
   }
-
   function renderHome() {
     return (
       <section className="screen homeScreen approvedHome withNav" aria-labelledby="home-title">
@@ -1489,8 +1564,36 @@ setSubmittedInquiry(nextInquiry);
             </label>
           </section>
 
-          <section className="formSection fulfillmentSection">
-            <SectionHeading number="05" title="FULFILLMENT" helper="TRRY will confirm pickup or delivery details after review." />
+                    <section className="formSection fulfillmentSection">
+            <SectionHeading number="05" title="FULFILLMENT" helper="Choose how you want to receive the order after approval." />
+            <div className="fulfillmentOptions" role="radiogroup" aria-label="Fulfillment method">
+              <button aria-checked={fulfillmentMethod === "pickup"} className={fulfillmentMethod === "pickup" ? "selected" : ""} onClick={() => setFulfillmentMethod("pickup")} role="radio" type="button">
+                <strong>PICKUP</strong>
+                <small>Pickup at TRRY Apparel, Iligan City.</small>
+              </button>
+              <button aria-checked={fulfillmentMethod === "delivery"} className={fulfillmentMethod === "delivery" ? "selected" : ""} onClick={() => setFulfillmentMethod("delivery")} role="radio" type="button">
+                <strong>DELIVERY</strong>
+                <small>Delivery fee will be confirmed after review.</small>
+              </button>
+            </div>
+            {fulfillmentMethod === "pickup" ? <p className="fulfillmentNote">Pickup at TRRY Apparel, Iligan City.</p> : null}
+            {fulfillmentMethod === "delivery" ? (
+              <div className="deliveryFields">
+                <p className="fulfillmentNote">Delivery fee will be confirmed after review.</p>
+                <label className="stackedField">
+                  <span>CITY / BARANGAY</span>
+                  <input aria-invalid={deliveryCityRequired} placeholder="Iligan City / Barangay" value={deliveryCity} onChange={(event) => setDeliveryCity(event.target.value)} />
+                </label>
+                <label className="stackedField">
+                  <span>COMPLETE DELIVERY ADDRESS</span>
+                  <input aria-invalid={deliveryAddressRequired} placeholder="House no., street, building, area" value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} />
+                </label>
+                <label className="stackedField">
+                  <span>LANDMARK OPTIONAL</span>
+                  <input placeholder="Near school, store, terminal..." value={deliveryLandmark} onChange={(event) => setDeliveryLandmark(event.target.value)} />
+                </label>
+              </div>
+            ) : null}
             <button className={neededDate ? "dateTrigger hasDate" : "dateTrigger"} onClick={() => { const selected = parseDateKey(neededDate); setDatePickerMonth(selected ? new Date(selected.getFullYear(), selected.getMonth(), 1, 12) : new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12)); setDatePickerOpen(true); }} type="button" aria-haspopup="dialog" aria-expanded={datePickerOpen}>
               <span>REQUESTED DATE</span>
               <strong>{selectedDateLabel}</strong>
@@ -1503,8 +1606,7 @@ setSubmittedInquiry(nextInquiry);
               </div>
             ) : null}
           </section>
-
-          <section className="formSection contactSection">
+<section className="formSection contactSection">
             <SectionHeading number="06" title="CONTACT" helper="No account needed. This is for quote updates only." />
             <label className="stackedField">
               <span>NAME</span>
@@ -1526,7 +1628,7 @@ setSubmittedInquiry(nextInquiry);
               <div><dt>METHOD</dt><dd>{method}</dd></div>
               <div><dt>COLOR</dt><dd>{color}</dd></div>
               <div><dt>QUANTITY</dt><dd>{formatPieceCount(totalPieces)}</dd></div>
-              <div><dt>FULFILLMENT</dt><dd>{neededDate ? `Needed by ${neededDate}` : "Date not set"}</dd></div>
+              <div><dt>FULFILLMENT</dt><dd>{fulfillmentReview}</dd></div><div><dt>NEEDED DATE</dt><dd>{neededDate ? `Needed by ${neededDate}` : "Date not set"}</dd></div>
               <div><dt>ARTWORK</dt><dd>{selectedArtworkSummary}</dd></div>
               <div><dt>CONTACT</dt><dd>{reviewContact}</dd></div>
             </dl>
@@ -1587,7 +1689,7 @@ setSubmittedInquiry(nextInquiry);
       <section className="screen submittedScreen withNav" aria-labelledby="submitted-title">
         <AppHeader rightLabel="RECEIPT" />
         <div className="successHeader"><span>INQUIRY RECEIVED</span><h1 id="submitted-title">REFERENCE<br />{current?.ref || "TRRY"}</h1><p>We'll review your request and prepare your quotation. Screenshot this receipt for easy tracking.</p></div>
-        <div className="receiptBox"><h2>TRRY INQUIRY RECEIPT</h2><dl><div><dt>REF NO.</dt><dd>{current?.ref}<button className="copyMini" onClick={() => current?.ref && navigator.clipboard?.writeText(current.ref)} type="button">COPY</button></dd></div><div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div><div><dt>QUANTITY</dt><dd>{current ? formatPieceCount(current.totalPieces) : ""}</dd></div><div><dt>METHOD</dt><dd>{current?.method}</dd></div><div><dt>STATUS</dt><dd><mark>{current?.statusLabel || "STATUS ERROR"}</mark></dd></div><div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div></dl><p>No quote before review. No print without approval.</p></div>
+        <div className="receiptBox"><h2>TRRY INQUIRY RECEIPT</h2><dl><div><dt>REF NO.</dt><dd>{current?.ref}<button className="copyMini" onClick={() => current?.ref && navigator.clipboard?.writeText(current.ref)} type="button">COPY</button></dd></div><div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div><div><dt>QUANTITY</dt><dd>{current ? formatPieceCount(current.totalPieces) : ""}</dd></div><div><dt>METHOD</dt><dd>{current?.method}</dd></div><div><dt>STATUS</dt><dd><mark>{current?.statusLabel || "STATUS ERROR"}</mark></dd></div><div><dt>FULFILLMENT</dt><dd>{getFulfillmentLabel(current?.fulfillmentMethod || "")}</dd></div>{current?.fulfillmentMethod === "delivery" ? <div><dt>DELIVERY ADDRESS</dt><dd>{getDeliverySummary(current.deliveryCity, current.deliveryAddress, current.deliveryLandmark) || "Address pending"}</dd></div> : null}<div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div></dl><p>No quote before review. No print without approval.</p></div>
         {formError ? <p className="formError" role="alert">{formError}</p> : null}
         {current?.artworkSource === "upload" && current.artworkUploadStatus === "failed" ? <button className="outlineCta" disabled={retryingArtwork} onClick={retryArtworkUpload} type="button">{retryingArtwork ? "UPLOADING ARTWORK" : "RETRY ARTWORK UPLOAD"}</button> : null}
         <TrackerCard statusKey={current?.statusKey} />
@@ -1618,9 +1720,9 @@ setSubmittedInquiry(nextInquiry);
           <button className="limeCta" disabled={isTracking} type="submit">{isTracking ? "TRACKING" : "TRACK INQUIRY"}</button>
         </form>
         {isSyncingInquiries ? <p className="syncStatus">UPDATING INQUIRIES...</p> : null}
-        {trackSearched ? trackedInquiry ? <div className="receiptBox foundInquiry"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{normalizeQuantityDisplay(trackedInquiry.quantity)}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>Saved to My Inquiries for future status refresh.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
+        {trackSearched ? trackedInquiry ? <div className="receiptBox foundInquiry"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{normalizeQuantityDisplay(trackedInquiry.quantity)}</dd></div><div><dt>STATUS</dt><dd><mark>{trackedInquiry.statusLabel}</mark></dd></div><div><dt>FULFILLMENT</dt><dd>{getFulfillmentLabel(trackedInquiry.fulfillmentMethod || "")}</dd></div>{trackedInquiry.fulfillmentMethod === "delivery" ? <div><dt>DELIVERY ADDRESS</dt><dd>{getDeliverySummary(trackedInquiry.deliveryCity || "", trackedInquiry.deliveryAddress || "", trackedInquiry.deliveryLandmark || "") || "Address pending"}</dd></div> : null}<div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><p>Saved to My Inquiries for future status refresh.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryListHeader"><h2>SAVED INQUIRIES</h2></div>
-        <div className="inquiryList">{inquiries.length ? inquiries.map((item) => { const nextAction = getNextActionLabel(item.statusKey); return <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><span className="inquiryTop"><strong>{item.productName}</strong><mark>{item.statusLabel || "STATUS ERROR"}</mark></span><span>{item.ref} / {formatPieceCount(item.totalPieces)}</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><small>NEXT: {nextAction}</small><b>VIEW DETAILS</b></button>; }) : <p className="emptyState">No saved inquiries yet. Browse the catalog to start one, or use the tracking form above.</p>}</div>
+        <div className="inquiryList">{inquiries.length ? inquiries.map((item) => { const nextAction = getNextActionLabel(item.statusKey); return <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><span className="inquiryTop"><strong>{item.productName}</strong><mark>{item.statusLabel || "STATUS ERROR"}</mark></span><span>{item.ref} / {formatPieceCount(item.totalPieces)}</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><small>{getFulfillmentLabel(item.fulfillmentMethod)}{item.fulfillmentMethod === "delivery" ? ` / ${getDeliverySummary(item.deliveryCity, item.deliveryAddress, item.deliveryLandmark)}` : ""}</small><small>NEXT: {nextAction}</small><b>VIEW DETAILS</b></button>; }) : <p className="emptyState">No saved inquiries yet. Browse the catalog to start one, or use the tracking form above.</p>}</div>
         <BottomNav active="myInquiries" />
       </section>
     );

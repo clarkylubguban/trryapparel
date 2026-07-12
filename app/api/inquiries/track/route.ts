@@ -51,17 +51,30 @@ export async function POST(request: Request) {
 
   try {
     const supabase = getSupabaseAdminClient();
-    const { data, error } = await supabase
+    const initialLookup = await supabase
       .from("ops_inquiries")
-      .select("id, contact, product, quantity, status, created_at")
+      .select("id, contact, product, quantity, status, created_at, fulfillment_method, delivery_city, delivery_address, delivery_landmark")
       .eq("id", inquiryNumber)
       .eq("contact", contact)
       .maybeSingle();
 
+    let data: Record<string, unknown> | null = initialLookup.data;
+    let error = initialLookup.error;
+
+    if (error && /fulfillment_method|delivery_city|delivery_address|delivery_landmark|schema cache|could not find/i.test(error.message || "")) {
+      const fallback = await supabase
+        .from("ops_inquiries")
+        .select("id, contact, product, quantity, status, created_at")
+        .eq("id", inquiryNumber)
+        .eq("contact", contact)
+        .maybeSingle();
+      data = fallback.data;
+      error = fallback.error;
+    }
+
     if (error) {
       return NextResponse.json({ ok: false, error: "Unable to track inquiry right now. Please try again." }, { status: 500 });
     }
-
     if (!data) {
       return NextResponse.json({ ok: false, error: "No inquiry found." }, { status: 404 });
     }
@@ -78,6 +91,10 @@ export async function POST(request: Request) {
         artworkLabel: "Artwork details saved with inquiry",
         statusKey: key,
         statusLabel: mapCustomerStatus(key),
+        fulfillmentMethod: text(data.fulfillment_method),
+        deliveryCity: text(data.delivery_city),
+        deliveryAddress: text(data.delivery_address),
+        deliveryLandmark: text(data.delivery_landmark),
       },
     });
   } catch (error) {
