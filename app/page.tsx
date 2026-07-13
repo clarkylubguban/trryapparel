@@ -10,7 +10,8 @@ type ArtworkSource = "upload" | "canva" | "send-later";
 type ArtworkUploadStatus = "not-needed" | "uploaded" | "failed";
 type FulfillmentMethod = "pickup" | "delivery";
 type TrackingSubstatus = "ready_for_pickup" | "out_for_delivery" | "delivered" | "completed";
-type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "PROOF APPROVAL" | "IN PRODUCTION" | "PICKUP OR DELIVERY" | "DELIVERED" | "INQUIRY CLOSED / LOST" | "STATUS UPDATE" | "STATUS ERROR";
+type ProductionStage = "queued" | "in_production" | "qc_finishing" | "ready_for_fulfillment" | "completed";
+type InquiryStatus = "FOR REVIEW" | "NEEDS QUOTE" | "PROOF APPROVAL" | "IN PRODUCTION" | "QC & FINISHING" | "READY FOR FULFILLMENT" | "PRODUCTION COMPLETED" | "PICKUP OR DELIVERY" | "DELIVERED" | "INQUIRY CLOSED / LOST" | "STATUS UPDATE" | "STATUS ERROR";
 
 type SizeRun = Record<SizeKey, number>;
 
@@ -84,6 +85,7 @@ type Inquiry = {
   trackingSubstatus: TrackingSubstatus | "";
   trackingNote: string;
   trackingUpdatedAt: string;
+  productionStage: ProductionStage | "";
   notes: string;
   customerName: string;
   customerContact: string;
@@ -108,6 +110,7 @@ type TrackedInquiry = {
   trackingSubstatus?: TrackingSubstatus | "";
   trackingNote?: string;
   trackingUpdatedAt?: string;
+  productionStage?: ProductionStage | "";
 };
 type InquiryDraft = {
   version: 1;
@@ -424,6 +427,10 @@ function normalizeTrackingSubstatus(value: unknown): TrackingSubstatus | "" {
   return getTrackingSubstatus(value);
 }
 
+function getProductionStage(value: unknown): ProductionStage | "" {
+  return value === "queued" || value === "in_production" || value === "qc_finishing" || value === "ready_for_fulfillment" || value === "completed" ? value : "";
+}
+
 function getTrackingSubstatusDetail(substatus: TrackingSubstatus | "", _fulfillmentMethod: FulfillmentMethod | "") {
   if (substatus === "ready_for_pickup") {
     return { title: "READY FOR PICKUP", message: "Your order is ready for pickup at TRRY Apparel, Iligan City." };
@@ -444,13 +451,19 @@ function getTrackingSubstatusLabel(substatus: TrackingSubstatus | "", fulfillmen
   return getTrackingSubstatusDetail(substatus, fulfillmentMethod)?.title || "";
 }
 
-function getCustomerFacingStatusLabel(statusLabel: unknown, trackingSubstatus: unknown) {
+function getCustomerFacingStatusLabel(statusLabel: unknown, trackingSubstatus: unknown, productionStage?: unknown) {
   const substatus = normalizeTrackingSubstatus(trackingSubstatus);
 
   if (substatus === "ready_for_pickup") return "READY FOR PICKUP";
   if (substatus === "out_for_delivery") return "OUT FOR DELIVERY";
   if (substatus === "delivered") return "DELIVERED";
   if (substatus === "completed") return "COMPLETED";
+
+  const stage = getProductionStage(productionStage);
+  if (stage === "in_production") return "IN PRODUCTION";
+  if (stage === "qc_finishing") return "QC & FINISHING";
+  if (stage === "ready_for_fulfillment") return "READY FOR FULFILLMENT";
+  if (stage === "completed") return "PRODUCTION COMPLETED";
 
   return typeof statusLabel === "string" && statusLabel.trim() ? statusLabel : "STATUS UPDATE";
 }
@@ -485,9 +498,13 @@ function normalizeStatus(value: unknown): InquiryStatus {
   return "STATUS UPDATE";
 }
 
-function getInquiryProgress(statusKey: unknown, trackingSubstatus?: unknown) {
+function getInquiryProgress(statusKey: unknown, trackingSubstatus?: unknown, productionStage?: unknown) {
   if (getTrackingSubstatus(trackingSubstatus)) {
     return { step: 5, label: "PICKUP OR DELIVERY", progress: 100, closed: false };
+  }
+
+  if (["in_production", "qc_finishing", "ready_for_fulfillment", "completed"].includes(getProductionStage(productionStage))) {
+    return { step: 4, label: "PRODUCTION", progress: 80, closed: false };
   }
 
   const status = normalizeTrackerStatus(statusKey);
@@ -515,8 +532,8 @@ function getInquiryProgress(statusKey: unknown, trackingSubstatus?: unknown) {
   return { step: 1, label: "INQUIRY RECEIVED", progress: 20, closed: false };
 }
 
-function getTrackerContext(statusKey: unknown, trackingSubstatus?: unknown) {
-  const progress = getInquiryProgress(statusKey, trackingSubstatus);
+function getTrackerContext(statusKey: unknown, trackingSubstatus?: unknown, productionStage?: unknown) {
+  const progress = getInquiryProgress(statusKey, trackingSubstatus, productionStage);
   if (progress.closed) return "This inquiry is closed. Message TRRY with your reference if you need help.";
   if (progress.step === 2) return "TRRY is preparing or reviewing your quotation.";
   if (progress.step === 3) return "Your order has moved to proof preparation and approval.";
@@ -525,8 +542,9 @@ function getTrackerContext(statusKey: unknown, trackingSubstatus?: unknown) {
   return "TRRY is checking your request details.";
 }
 
-function getNextActionLabel(statusKey: unknown, trackingSubstatus?: unknown) {
+function getNextActionLabel(statusKey: unknown, trackingSubstatus?: unknown, productionStage?: unknown) {
   if (getTrackingSubstatus(trackingSubstatus)) return "PICKUP OR DELIVERY";
+  if (["in_production", "qc_finishing", "ready_for_fulfillment", "completed"].includes(getProductionStage(productionStage))) return "PRODUCTION IN PROGRESS";
 
   const status = normalizeTrackerStatus(statusKey);
 
@@ -586,6 +604,7 @@ function getStoredInquiries(): Inquiry[] {
         trackingSubstatus: getTrackingSubstatus(item.trackingSubstatus || item.tracking_substatus),
         trackingNote: typeof item.trackingNote === "string" ? item.trackingNote : typeof item.tracking_note === "string" ? item.tracking_note : "",
         trackingUpdatedAt: typeof item.trackingUpdatedAt === "string" ? item.trackingUpdatedAt : typeof item.tracking_updated_at === "string" ? item.tracking_updated_at : "",
+        productionStage: getProductionStage(item.productionStage || item.production_stage),
         notes: typeof item.notes === "string" ? item.notes : "",
         customerName: typeof item.customerName === "string" ? item.customerName : "",
         customerContact: typeof item.customerContact === "string" ? item.customerContact : typeof item.contact === "string" ? item.contact : "",
@@ -1027,6 +1046,7 @@ function openCatalog() {
       trackingSubstatus: getTrackingSubstatus(freshInquiry.trackingSubstatus) || oldItem.trackingSubstatus,
       trackingNote: freshInquiry.trackingNote || oldItem.trackingNote,
       trackingUpdatedAt: freshInquiry.trackingUpdatedAt || oldItem.trackingUpdatedAt,
+      productionStage: getProductionStage(freshInquiry.productionStage) || oldItem.productionStage,
     };
   }
 
@@ -1067,6 +1087,7 @@ function openCatalog() {
       trackingSubstatus: getTrackingSubstatus(freshInquiry.trackingSubstatus),
       trackingNote: freshInquiry.trackingNote || "",
       trackingUpdatedAt: freshInquiry.trackingUpdatedAt || "",
+      productionStage: getProductionStage(freshInquiry.productionStage),
     };
   }
 
@@ -1282,6 +1303,7 @@ setInquiries(nextList);
         trackingSubstatus: "",
         trackingNote: "",
         trackingUpdatedAt: "",
+        productionStage: "",
           notes: notes.trim(),
           customerName: customerName.trim(),
           customerContact: customerContact.trim(),
@@ -1346,6 +1368,7 @@ setInquiries(nextList);
         trackingSubstatus: "",
         trackingNote: "",
         trackingUpdatedAt: "",
+        productionStage: "",
         notes: notes.trim(),
         customerName: customerName.trim(),
         customerContact: customerContact.trim(),
@@ -1770,19 +1793,19 @@ setSubmittedInquiry(nextInquiry);
       <section className="screen submittedScreen withNav" aria-labelledby="submitted-title">
         <AppHeader rightLabel="RECEIPT" />
         <div className="successHeader"><span>INQUIRY RECEIVED</span><h1 id="submitted-title">REFERENCE<br />{current?.ref || "TRRY"}</h1><p>We'll review your request and prepare your quotation. Screenshot this receipt for easy tracking.</p></div>
-        <div className="receiptBox"><h2>TRRY INQUIRY RECEIPT</h2><dl><div><dt>REF NO.</dt><dd>{current?.ref}<button className="copyMini" onClick={() => current?.ref && navigator.clipboard?.writeText(current.ref)} type="button">COPY</button></dd></div><div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div><div><dt>QUANTITY</dt><dd>{current ? formatPieceCount(current.totalPieces) : ""}</dd></div><div><dt>METHOD</dt><dd>{current?.method}</dd></div><div><dt>STATUS</dt><dd><mark>{getCustomerFacingStatusLabel(current?.statusLabel, current?.trackingSubstatus)}</mark></dd></div><div><dt>FULFILLMENT</dt><dd>{getFulfillmentLabel(current?.fulfillmentMethod || "")}</dd></div>{current?.fulfillmentMethod === "delivery" ? <div><dt>DELIVERY ADDRESS</dt><dd>{getDeliverySummary(current.deliveryCity, current.deliveryAddress, current.deliveryLandmark) || "Address pending"}</dd></div> : null}<div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div></dl><p>No quote before review. No print without approval.</p></div>
+        <div className="receiptBox"><h2>TRRY INQUIRY RECEIPT</h2><dl><div><dt>REF NO.</dt><dd>{current?.ref}<button className="copyMini" onClick={() => current?.ref && navigator.clipboard?.writeText(current.ref)} type="button">COPY</button></dd></div><div><dt>PRODUCT</dt><dd>{current?.productName}</dd></div><div><dt>QUANTITY</dt><dd>{current ? formatPieceCount(current.totalPieces) : ""}</dd></div><div><dt>METHOD</dt><dd>{current?.method}</dd></div><div><dt>STATUS</dt><dd><mark>{getCustomerFacingStatusLabel(current?.statusLabel, current?.trackingSubstatus, current?.productionStage)}</mark></dd></div><div><dt>FULFILLMENT</dt><dd>{getFulfillmentLabel(current?.fulfillmentMethod || "")}</dd></div>{current?.fulfillmentMethod === "delivery" ? <div><dt>DELIVERY ADDRESS</dt><dd>{getDeliverySummary(current.deliveryCity, current.deliveryAddress, current.deliveryLandmark) || "Address pending"}</dd></div> : null}<div><dt>ARTWORK</dt><dd>{getArtworkStateLabel(current)}</dd></div></dl><p>No quote before review. No print without approval.</p></div>
         {formError ? <p className="formError" role="alert">{formError}</p> : null}
         {current?.artworkSource === "upload" && current.artworkUploadStatus === "failed" ? <button className="outlineCta" disabled={retryingArtwork} onClick={retryArtworkUpload} type="button">{retryingArtwork ? "UPLOADING ARTWORK" : "RETRY ARTWORK UPLOAD"}</button> : null}
-        <TrackerCard statusKey={current?.statusKey} fulfillmentMethod={current?.fulfillmentMethod} trackingSubstatus={current?.trackingSubstatus} trackingNote={current?.trackingNote} trackingUpdatedAt={current?.trackingUpdatedAt} />
+        <TrackerCard statusKey={current?.statusKey} fulfillmentMethod={current?.fulfillmentMethod} trackingSubstatus={current?.trackingSubstatus} trackingNote={current?.trackingNote} trackingUpdatedAt={current?.trackingUpdatedAt} productionStage={current?.productionStage} />
         <a className="blackButton" href={messengerLink} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a>
         <button className="outlineCta" onClick={() => setScreen("myInquiries")} type="button">VIEW ALL INQUIRIES</button>
         <BottomNav active="myInquiries" />
       </section>
     );
   }
-  function TrackerCard({ statusKey, fulfillmentMethod, trackingSubstatus, trackingNote, trackingUpdatedAt }: { statusKey?: string; fulfillmentMethod?: FulfillmentMethod | ""; trackingSubstatus?: TrackingSubstatus | ""; trackingNote?: string; trackingUpdatedAt?: string }) {
-    const progress = getInquiryProgress(statusKey, trackingSubstatus);
-    const context = getTrackerContext(statusKey, trackingSubstatus);
+  function TrackerCard({ statusKey, fulfillmentMethod, trackingSubstatus, trackingNote, trackingUpdatedAt, productionStage }: { statusKey?: string; fulfillmentMethod?: FulfillmentMethod | ""; trackingSubstatus?: TrackingSubstatus | ""; trackingNote?: string; trackingUpdatedAt?: string; productionStage?: ProductionStage | "" }) {
+    const progress = getInquiryProgress(statusKey, trackingSubstatus, productionStage);
+    const context = getTrackerContext(statusKey, trackingSubstatus, productionStage);
 
     if (progress.closed) return <div className="trackerCard closed"><h2>TRACK YOUR INQUIRY <span>CLOSED</span></h2><p className="active">{progress.label}</p><small>{context}</small></div>;
 
@@ -1801,9 +1824,9 @@ setSubmittedInquiry(nextInquiry);
           <button className="limeCta" disabled={isTracking} type="submit">{isTracking ? "TRACKING" : "TRACK INQUIRY"}</button>
         </form>
         {isSyncingInquiries ? <p className="syncStatus">UPDATING INQUIRIES...</p> : null}
-        {trackSearched ? trackedInquiry ? <div className="receiptBox foundInquiry"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{normalizeQuantityDisplay(trackedInquiry.quantity)}</dd></div><div><dt>STATUS</dt><dd><mark>{getCustomerFacingStatusLabel(trackedInquiry.statusLabel, trackedInquiry.trackingSubstatus)}</mark></dd></div><div><dt>FULFILLMENT</dt><dd>{getFulfillmentLabel(trackedInquiry.fulfillmentMethod || "")}</dd></div>{trackedInquiry.fulfillmentMethod === "delivery" ? <div><dt>DELIVERY ADDRESS</dt><dd>{getDeliverySummary(trackedInquiry.deliveryCity || "", trackedInquiry.deliveryAddress || "", trackedInquiry.deliveryLandmark || "") || "Address pending"}</dd></div> : null}<div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><TrackingSubstatusPanel statusKey={trackedInquiry.statusKey} fulfillmentMethod={trackedInquiry.fulfillmentMethod} trackingSubstatus={trackedInquiry.trackingSubstatus} trackingNote={trackedInquiry.trackingNote} trackingUpdatedAt={trackedInquiry.trackingUpdatedAt} /><p>Saved to My Inquiries for future status refresh.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
+        {trackSearched ? trackedInquiry ? <div className="receiptBox foundInquiry"><h2>FOUND INQUIRY</h2><dl><div><dt>REF NO.</dt><dd>{trackedInquiry.id}</dd></div><div><dt>PRODUCT</dt><dd>{trackedInquiry.product}</dd></div><div><dt>QUANTITY</dt><dd>{normalizeQuantityDisplay(trackedInquiry.quantity)}</dd></div><div><dt>STATUS</dt><dd><mark>{getCustomerFacingStatusLabel(trackedInquiry.statusLabel, trackedInquiry.trackingSubstatus, trackedInquiry.productionStage)}</mark></dd></div><div><dt>FULFILLMENT</dt><dd>{getFulfillmentLabel(trackedInquiry.fulfillmentMethod || "")}</dd></div>{trackedInquiry.fulfillmentMethod === "delivery" ? <div><dt>DELIVERY ADDRESS</dt><dd>{getDeliverySummary(trackedInquiry.deliveryCity || "", trackedInquiry.deliveryAddress || "", trackedInquiry.deliveryLandmark || "") || "Address pending"}</dd></div> : null}<div><dt>ARTWORK</dt><dd>{trackedInquiry.artworkLabel}</dd></div></dl><TrackingSubstatusPanel statusKey={trackedInquiry.statusKey} fulfillmentMethod={trackedInquiry.fulfillmentMethod} trackingSubstatus={trackedInquiry.trackingSubstatus} trackingNote={trackedInquiry.trackingNote} trackingUpdatedAt={trackedInquiry.trackingUpdatedAt} /><p>Saved to My Inquiries for future status refresh.</p></div> : <div className="notFound"><p>No inquiry found. Check your reference number, or reach us directly.</p>{trackRef.trim() ? <a className="blackButton" href={`${MESSENGER_LINK}?text=${encodeURIComponent(`Hi TRRY, I need help finding inquiry ${trackRef.trim()}.`)}`} rel="noreferrer" target="_blank">CHAT WITH US ON MESSENGER</a> : null}</div> : null}
         <div className="inquiryListHeader"><h2>SAVED INQUIRIES</h2></div>
-        <div className="inquiryList">{inquiries.length ? inquiries.map((item) => { const nextAction = getNextActionLabel(item.statusKey, item.trackingSubstatus); return <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><span className="inquiryTop"><strong>{item.productName}</strong><mark>{getCustomerFacingStatusLabel(item.statusLabel, item.trackingSubstatus)}</mark></span><span>{item.ref} / {formatPieceCount(item.totalPieces)}</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><small>{getFulfillmentLabel(item.fulfillmentMethod)}{item.fulfillmentMethod === "delivery" ? ` / ${getDeliverySummary(item.deliveryCity, item.deliveryAddress, item.deliveryLandmark)}` : ""}</small>{getTrackingSubstatusLabel(item.trackingSubstatus, item.fulfillmentMethod) ? <small>{getTrackingSubstatusLabel(item.trackingSubstatus, item.fulfillmentMethod)}</small> : null}<TrackingSubstatusPanel statusKey={item.statusKey} fulfillmentMethod={item.fulfillmentMethod} trackingSubstatus={item.trackingSubstatus} trackingNote={item.trackingNote} trackingUpdatedAt={item.trackingUpdatedAt} /><small>NEXT: {nextAction}</small><b>VIEW DETAILS</b></button>; }) : <p className="emptyState">No saved inquiries yet. Browse the catalog to start one, or use the tracking form above.</p>}</div>
+        <div className="inquiryList">{inquiries.length ? inquiries.map((item) => { const nextAction = getNextActionLabel(item.statusKey, item.trackingSubstatus, item.productionStage); return <button className="inquiryItem" key={item.ref} onClick={() => { setSubmittedInquiry(item); setScreen("submitted"); }} type="button"><span className="inquiryTop"><strong>{item.productName}</strong><mark>{getCustomerFacingStatusLabel(item.statusLabel, item.trackingSubstatus, item.productionStage)}</mark></span><span>{item.ref} / {formatPieceCount(item.totalPieces)}</span><small>Submitted {formatCustomerDate(item.createdAt)}</small><small>{getArtworkStateLabel(item)}</small><small>{getFulfillmentLabel(item.fulfillmentMethod)}{item.fulfillmentMethod === "delivery" ? ` / ${getDeliverySummary(item.deliveryCity, item.deliveryAddress, item.deliveryLandmark)}` : ""}</small>{getTrackingSubstatusLabel(item.trackingSubstatus, item.fulfillmentMethod) ? <small>{getTrackingSubstatusLabel(item.trackingSubstatus, item.fulfillmentMethod)}</small> : null}<TrackingSubstatusPanel statusKey={item.statusKey} fulfillmentMethod={item.fulfillmentMethod} trackingSubstatus={item.trackingSubstatus} trackingNote={item.trackingNote} trackingUpdatedAt={item.trackingUpdatedAt} /><small>NEXT: {nextAction}</small><b>VIEW DETAILS</b></button>; }) : <p className="emptyState">No saved inquiries yet. Browse the catalog to start one, or use the tracking form above.</p>}</div>
         <BottomNav active="myInquiries" />
       </section>
     );

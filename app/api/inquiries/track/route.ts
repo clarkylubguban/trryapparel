@@ -53,13 +53,24 @@ export async function POST(request: Request) {
     const supabase = getSupabaseAdminClient();
     const initialLookup = await supabase
       .from("ops_inquiries")
-      .select("id, contact, product, quantity, status, created_at, fulfillment_method, delivery_city, delivery_address, delivery_landmark, tracking_substatus, tracking_note, tracking_updated_at")
+      .select("id, contact, product, quantity, status, created_at, fulfillment_method, delivery_city, delivery_address, delivery_landmark, tracking_substatus, tracking_note, tracking_updated_at, production_stage")
       .eq("id", inquiryNumber)
       .eq("contact", contact)
       .maybeSingle();
 
     let data: Record<string, unknown> | null = initialLookup.data;
     let error = initialLookup.error;
+
+    if (error && /production_stage|schema cache|could not find/i.test(error.message || "")) {
+      const fallbackWithoutProductionStage = await supabase
+        .from("ops_inquiries")
+        .select("id, contact, product, quantity, status, created_at, fulfillment_method, delivery_city, delivery_address, delivery_landmark, tracking_substatus, tracking_note, tracking_updated_at")
+        .eq("id", inquiryNumber)
+        .eq("contact", contact)
+        .maybeSingle();
+      data = fallbackWithoutProductionStage.data;
+      error = fallbackWithoutProductionStage.error;
+    }
 
     if (error && /fulfillment_method|delivery_city|delivery_address|delivery_landmark|tracking_substatus|tracking_note|tracking_updated_at|schema cache|could not find/i.test(error.message || "")) {
       const fallback = await supabase
@@ -105,6 +116,8 @@ export async function POST(request: Request) {
         trackingSubstatus: text(data.tracking_substatus),
         trackingNote: text(data.tracking_note),
         trackingUpdatedAt: text(data.tracking_updated_at),
+        production_stage: text(data.production_stage),
+        productionStage: text(data.production_stage),
       },
     });
   } catch (error) {
