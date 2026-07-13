@@ -1635,10 +1635,12 @@ setSubmittedInquiry(nextInquiry);
                   <input accept=".png,.jpg,.jpeg,.pdf,.svg,.ai,.eps,.psd" onChange={(event) => handleUpload(event.target.files?.[0])} type="file" />
                   <span aria-hidden="true" className="uploadIcon">UPLOAD</span>
                   <strong>TAP TO ADD YOUR FILE</strong>
+                  <small className="uploadSourceHint">From Photos, Camera, Files, or Google Drive</small>
                   <small>PNG, JPG, PDF, SVG, AI, EPS, PSD</small>
                 </label>
               )}
             </div>
+            <p className="googleDriveHint"><strong>USING GOOGLE DRIVE?</strong><span>{"Choose File \u2192 Browse \u2192 Google Drive"}</span></p>
             {uploadStatus === "ready" ? <p className="uploadState good">Artwork ready for review.</p> : null}
             {uploadStatus === "error" ? <p className="uploadState bad">{uploadMessage}</p> : null}
             <div className="artworkDivider">OR USE ANOTHER OPTION</div>
