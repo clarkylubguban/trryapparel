@@ -1494,17 +1494,17 @@ setSubmittedInquiry(nextInquiry);
           <h2>SERVICES</h2>
           <div className="approvedServiceLedger">
             <div className="approvedServiceRow">
-              <span className="approvedServiceIcon" aria-hidden="true"><svg viewBox="0 0 32 32" role="img"><path d="M11 5h10l5 4-3 5-3-2v15H12V12l-3 2-3-5 5-4Z" /></svg></span>
+              <span className="approvedServiceIcon" aria-hidden="true"><img src="/icons/services/custom-tshirts.svg" alt="" /></span>
               <strong>Custom t-shirts</strong>
               <span>DTF / SCREEN</span>
             </div>
             <div className="approvedServiceRow">
-              <span className="approvedServiceIcon" aria-hidden="true"><svg viewBox="0 0 32 32" role="img"><path d="M5 21c.8-6.3 5.2-10 11-10s10.2 3.7 11 10H5Z" /><path d="M16 7v4" /><path d="M4 21h24" /></svg></span>
+              <span className="approvedServiceIcon" aria-hidden="true"><img src="/icons/services/embroidery-caps.svg" alt="" /></span>
               <strong>Embroidery and caps</strong>
               <span>HOOP 20CM</span>
             </div>
             <div className="approvedServiceRow">
-              <span className="approvedServiceIcon" aria-hidden="true"><svg viewBox="0 0 32 32" role="img"><path d="M12 5h8l4 4-3 4-2-2v16h-6V11l-2 2-3-4 4-4Z" /><path d="M14 5l2 4 2-4" /></svg></span>
+              <span className="approvedServiceIcon" aria-hidden="true"><img src="/icons/services/uniforms-business.svg" alt="" /></span>
               <strong>Uniforms and business</strong>
               <span>MOQ 30</span>
             </div>
@@ -1526,7 +1526,7 @@ setSubmittedInquiry(nextInquiry);
         {catalogStatus === "loading" ? <div className="catalogSkeleton" aria-label="Loading catalog"><span /><span /><span /><span /></div> : null}
         {catalogStatus === "error" ? <div className="formError" role="alert"><p>{catalogError}{ALLOW_CATALOG_FALLBACK ? " Showing local catalog fallback." : ""}</p><button className="outlineCta" onClick={loadCatalog} type="button">RETRY CATALOG</button></div> : null}
         {catalogStatus === "ready" && !products.length ? <p className="emptyState">Catalog is being prepared. Please check again soon.</p> : null}
-        {catalogStatus !== "loading" && products.length ? <div className="catalogGrid">{products.map((product) => <button className="productCard" key={product.id} onClick={() => openProduct(product)} type="button"><ProductThumb product={product} /><span className="productMeta"><small>{product.sizing === "quantity-only" ? "QUANTITY ORDER" : "SIZE RUN"}</small><strong>{product.name}</strong></span>{product.description ? <span className="productDescription">{product.description}</span> : null}<span className="methodTags">{product.tags.map((tag) => <small key={tag}>{tag.replace(" Transfer", "")}</small>)}</span><span className="priceLine">{getPriceDisplay(product)}</span>{product.moq.minimum > 1 ? <span className="moqChip">MOQ {product.moq.minimum} PCS</span> : null}<span className="blackCta">CUSTOMIZE</span></button>)}</div> : null}
+        {catalogStatus !== "loading" && products.length ? <div className="catalogGrid">{products.map((product) => <button className="productCard" key={product.id} onClick={() => openProduct(product)} type="button"><ProductThumb product={product} /><strong>{product.name}</strong><span className="priceLine">{getPriceDisplay(product)}</span><span className="blackCta">CUSTOMIZE</span></button>)}</div> : null}
         <BottomNav active="catalog" />
       </section>
     );
