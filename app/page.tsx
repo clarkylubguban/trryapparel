@@ -136,10 +136,10 @@ type InquiryDraft = {
 };
 
 const FALLBACK_PRODUCTS: Product[] = [
-  { id: "premium-cotton-shirt", name: "Premium Cotton Shirt", description: "Soft daily shirt for prints and slogans.", basePrice: 280, icon: "PS", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], availableColors: [], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "premium-cotton-shirt", name: "Premium Cotton Shirt", description: "Soft daily shirt for prints and slogans.", basePrice: 280, icon: "PS", tags: ["DTF Transfer", "Screen Print"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL", "3XL"], availableColors: [], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
   { id: "caps", name: "Caps", description: "Logo caps for crews and teams.", basePrice: 180, icon: "CP", tags: ["Embroidery"], availableSizes: [], availableColors: [], sizing: "quantity-only", moq: { minimum: 12, note: "Minimum order: 12 pieces." }, referenceRequired: true },
-  { id: "boxy-crop-shirt", name: "Boxy Crop Shirt", description: "Boxy fit merch shirt.", basePrice: 300, icon: "BS", tags: ["DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], availableColors: [], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
-  { id: "polo-uniform", name: "Polo Uniform", description: "Business polo with logo placement.", basePrice: 350, icon: "PU", tags: ["Embroidery", "DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL"], availableColors: [], sizing: "sized", moq: { minimum: 12, note: "Minimum order: 12 pieces." }, referenceRequired: true },
+  { id: "boxy-crop-shirt", name: "Boxy Crop Shirt", description: "Boxy fit merch shirt.", basePrice: 300, icon: "BS", tags: ["DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL", "3XL"], availableColors: [], sizing: "sized", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
+  { id: "polo-uniform", name: "Polo Uniform", description: "Business polo with logo placement.", basePrice: 350, icon: "PU", tags: ["Embroidery", "DTF Transfer"], availableSizes: ["XS", "S", "M", "L", "XL", "2XL", "3XL"], availableColors: [], sizing: "sized", moq: { minimum: 12, note: "Minimum order: 12 pieces." }, referenceRequired: true },
   { id: "tote-bag", name: "Tote Bag", description: "Reusable merch and event bag.", basePrice: 220, icon: "TB", tags: ["DTF Transfer", "Screen Print"], availableSizes: [], availableColors: [], sizing: "quantity-only", moq: { minimum: 1, note: "Minimum order: 1 piece." } },
   { id: "towels", name: "Towels", description: "Premium giveaway or team towels.", basePrice: 200, icon: "TW", tags: ["Embroidery"], availableSizes: [], availableColors: [], sizing: "quantity-only", moq: { minimum: 12, note: "Minimum order: 12 pieces." }, referenceRequired: true },
 ];
@@ -160,8 +160,9 @@ const COLORS: ColorOption[] = [
   { name: "Navy", value: "#0c1d39" },
 ];
 
+const CUSTOMIZE_SIZES: SizeKey[] = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 const SIZE_ORDER: SizeKey[] = ["XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL", "4XL", "5XL"];
-const DEFAULT_VISIBLE_SIZES = new Set<SizeKey>(["S", "M", "L", "XL"]);
+const DEFAULT_VISIBLE_SIZES = new Set<SizeKey>(CUSTOMIZE_SIZES);
 const EMPTY_SIZE_RUN: SizeRun = {};
 const ARTWORK_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf", "svg", "ai", "eps", "psd"]);
 const MAX_ARTWORK_SIZE = 15 * 1024 * 1024;
@@ -181,7 +182,8 @@ function sortCatalogSizes(sizes: SizeKey[]) {
 
 function createSizeRunForProduct(product: Product): SizeRun {
   const nextSizeRun: SizeRun = {};
-  product.availableSizes.forEach((size) => {
+  const sizes = product.sizing === "quantity-only" ? [] : CUSTOMIZE_SIZES;
+  sizes.forEach((size) => {
     nextSizeRun[size] = 0;
   });
   return nextSizeRun;
@@ -904,8 +906,7 @@ export default function HomePage() {
       { key: "other", label: "Other", colorName: suggested.name, value: suggested.value },
     ];
   }, [activeColors]);
-  const selectedColorLabel = color === "White" || color === "Black" ? color : `Suggested: ${color}`;
-  const sortedProductSizes = useMemo(() => sortCatalogSizes(activeProduct.availableSizes), [activeProduct.availableSizes]);
+  const sortedProductSizes = useMemo(() => isQuantityOnlyProduct ? [] : sortCatalogSizes(CUSTOMIZE_SIZES), [isQuantityOnlyProduct]);
   const defaultSizeKeys = useMemo(() => sortedProductSizes.filter((size) => DEFAULT_VISIBLE_SIZES.has(size)), [sortedProductSizes]);
   const extraSizeKeys = useMemo(() => sortedProductSizes.filter((size) => !DEFAULT_VISIBLE_SIZES.has(size)), [sortedProductSizes]);
   const extraSizePieces = useMemo(() => extraSizeKeys.reduce((sum, size) => sum + (sizeRun[size] ?? 0), 0), [extraSizeKeys, sizeRun]);
@@ -1552,7 +1553,6 @@ setSubmittedInquiry(nextInquiry);
                     </span>
                   ))}
                 </div>
-                <b>{selectedColorLabel}</b>
               </div>
             </div>
           </section>
@@ -1561,10 +1561,10 @@ setSubmittedInquiry(nextInquiry);
             <SectionHeading number="01" title="PRINT METHOD" helper="Choose how TRRY should decorate this item." />
             <div className="methodCards">
               {activeProduct.tags.map((item) => (
-                <button className={method === item ? "selected" : ""} key={item} onClick={() => setMethod(item)} type="button">
+                <button aria-pressed={method === item} className={method === item ? "selected" : ""} key={item} onClick={() => setMethod(item)} type="button">
                   <span>
                     <strong>{item.toUpperCase()}</strong>
-                    {method === item ? <b>SELECTED</b> : null}
+                    <b>{method === item ? "\u2713 SELECTED" : "SELECT"}</b>
                   </span>
                   <small>{item === "DTF Transfer" ? "Full-color, detailed prints" : item === "Embroidery" ? "Stitched, premium finish" : "Best for bulk, bold colors"}</small>
                 </button>
